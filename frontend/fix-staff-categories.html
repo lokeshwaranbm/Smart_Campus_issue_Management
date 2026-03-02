@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Staff Categories</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        h1 { color: #1e293b; }
+        .section { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 16px; }
+        button:hover { background: #2563eb; }
+        button.danger { background: #ef4444; }
+        button.danger:hover { background: #dc2626; }
+        pre { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+        .success { background: #d1fae5; border-left: 4px solid #10b981; padding: 12px; margin: 10px 0; border-radius: 4px; color: #065f46; }
+        .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 10px 0; border-radius: 4px; color: #92400e; }
+        .error { background: #fee2e2; border-left: 4px solid #ef4444; padding: 12px; margin: 10px 0; border-radius: 4px; color: #991b1b; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Fix Staff Categories Data</h1>
+    <p style="color: #64748b;">This tool fixes staff data where categories were stored as objects instead of strings</p>
+
+    <div class="section">
+        <h2>Current Data Status</h2>
+        <button onclick="checkData()">🔍 Check Current Data</button>
+        <div id="status"></div>
+    </div>
+
+    <div class="section">
+        <h2>Fix Data</h2>
+        <button onclick="fixData()">✅ Fix Staff Categories</button>
+        <button class="danger" onclick="clearNotifications()" style="margin-left: 10px;">🗑️ Clear Notifications</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'smart-campus-users';
+        const NOTIFICATIONS_KEY = 'smart-campus-admin-notifications';
+
+        function checkData() {
+            const users = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const staff = users.filter(u => u.role === 'maintenance');
+            
+            let html = '<h3>Staff Members Found: ' + staff.length + '</h3>';
+            
+            let needsFix = 0;
+            staff.forEach(s => {
+                const cats = s.assignedCategories || [];
+                const hasObjects = cats.some(c => typeof c === 'object');
+                
+                if (hasObjects) {
+                    needsFix++;
+                    html += `<div class="warning">⚠️ <strong>${s.email}</strong> has object-format categories (needs fix)</div>`;
+                    html += `<pre>${JSON.stringify(cats, null, 2)}</pre>`;
+                } else {
+                    html += `<div class="success">✅ <strong>${s.email}</strong> categories are correct</div>`;
+                    if (cats.length > 0) {
+                        html += `<pre>${JSON.stringify(cats, null, 2)}</pre>`;
+                    }
+                }
+            });
+            
+            if (needsFix > 0) {
+                html += `<div class="error"><strong>${needsFix} staff member(s) need to be fixed!</strong></div>`;
+            } else {
+                html += `<div class="success"><strong>All staff data is correct! ✨</strong></div>`;
+            }
+            
+            document.getElementById('status').innerHTML = html;
+        }
+
+        function fixData() {
+            const users = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            let fixed = 0;
+            
+            users.forEach(user => {
+                if (user.role === 'maintenance' && user.assignedCategories) {
+                    const cats = user.assignedCategories;
+                    const hasObjects = cats.some(c => typeof c === 'object');
+                    
+                    if (hasObjects) {
+                        // Convert objects to strings
+                        user.assignedCategories = cats.map(c => {
+                            if (typeof c === 'object') {
+                                return c.id || c.value || c._id || c.name;
+                            }
+                            return c;
+                        }).filter(c => c && typeof c === 'string');
+                        fixed++;
+                    }
+                }
+            });
+            
+            if (fixed > 0) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+                document.getElementById('result').innerHTML = 
+                    `<div class="success">✅ <strong>Fixed ${fixed} staff member(s)!</strong><br>Categories are now stored as strings for proper auto-assignment.</div>`;
+            } else {
+                document.getElementById('result').innerHTML = 
+                    `<div class="success">✅ No fixes needed - all staff data is already correct!</div>`;
+            }
+            
+            // Re-check to show updated status
+            checkData();
+        }
+
+        function clearNotifications() {
+            localStorage.removeItem(NOTIFICATIONS_KEY);
+            document.getElementById('result').innerHTML = 
+                `<div class="success">✅ <strong>Notifications cleared!</strong><br>Any "No staff assigned" warnings will be regenerated when new issues are submitted.</div>`;
+        }
+
+        // Auto-run check on load
+        checkData();
+    </script>
+</body>
+</html>

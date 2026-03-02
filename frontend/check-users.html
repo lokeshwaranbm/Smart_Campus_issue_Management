@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check Users</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 10px 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Smart Campus Users Debug</h1>
+    
+    <button onclick="showUsers()">Show All Users</button>
+    <button onclick="clearUsers()">Clear All Users</button>
+    <button onclick="addTestStudent()">Add Test Student (s1@gmail.com / s1@123)</button>
+    <button onclick="addTestMaintenance()">Add Test Maintenance (m3@gmail.com / m3@123)</button>
+    
+    <h2>Current Users:</h2>
+    <pre id="output">Click "Show All Users" to see registered accounts</pre>
+
+    <script>
+        const STORAGE_KEY = 'smart-campus-users';
+
+        function showUsers() {
+            const users = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            document.getElementById('output').textContent = JSON.stringify(users, null, 2);
+            console.log('Users:', users);
+        }
+
+        function clearUsers() {
+            if (confirm('Clear all users except admin?')) {
+                const admin = {
+                    fullName: 'System Administrator',
+                    email: 'admin@university.edu',
+                    password: 'Admin@123',
+                    role: 'admin',
+                    status: 'active',
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([admin]));
+                showUsers();
+                alert('Users cleared. Only admin remains.');
+            }
+        }
+
+        function addTestStudent() {
+            const users = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const exists = users.find(u => u.email.toLowerCase() === 's1@gmail.com');
+            if (exists) {
+                alert('Student s1@gmail.com already exists!');
+                return;
+            }
+            users.push({
+                fullName: 'Test Student One',
+                email: 's1@gmail.com',
+                registerNumber: 'REG001',
+                department: 'Computer Science',
+                semester: '3rd Year',
+                password: 's1@123',
+                role: 'student',
+                status: 'active',
+                createdAt: new Date().toISOString()
+            });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+            showUsers();
+            alert('Test student added: s1@gmail.com / s1@123');
+        }
+
+        function addTestMaintenance() {
+            const users = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const exists = users.find(u => u.email.toLowerCase() === 'm3@gmail.com');
+            if (exists) {
+                alert('Maintenance staff m3@gmail.com already exists!');
+                return;
+            }
+            users.push({
+                fullName: 'Test Maintenance Three',
+                email: 'm3@gmail.com',
+                employeeId: 'EMP003',
+                department: 'Electrical',
+                phoneNumber: '1234567890',
+                password: 'm3@123',
+                role: 'maintenance',
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                approvedAt: new Date().toISOString()
+            });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+            showUsers();
+            alert('Test maintenance staff added (already approved): m3@gmail.com / m3@123');
+        }
+
+        // Auto-show users on load
+        showUsers();
+    </script>
+</body>
+</html>

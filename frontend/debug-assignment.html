@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Auto-Assignment</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        h1 { color: #1e293b; margin-bottom: 10px; }
+        h2 { color: #334155; margin-top: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+        .section { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        pre { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+        button { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; margin: 5px; }
+        button:hover { background: #2563eb; }
+        .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 10px 0; border-radius: 4px; color: #92400e; }
+        .success { background: #d1fae5; border-left: 4px solid #10b981; padding: 12px; margin: 10px 0; border-radius: 4px; color: #065f46; }
+        .error { background: #fee2e2; border-left: 4px solid #ef4444; padding: 12px; margin: 10px 0; border-radius: 4px; color: #991b1b; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; font-weight: 600; color: #475569; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Auto-Assignment Debugger</h1>
+    <p style="color: #64748b;">Check why issues aren't being auto-assigned to staff members</p>
+
+    <div class="section">
+        <button onclick="checkStaff()">🔄 Check Staff Data</button>
+        <button onclick="testAssignment()">🧪 Test Auto-Assignment</button>
+        <button onclick="checkNotifications()">🔔 Check Notifications</button>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'smart-campus-users';
+        const ISSUES_KEY = 'smart-campus-issues';
+        const NOTIFICATIONS_KEY = 'smart-campus-admin-notifications';
+
+        const ISSUE_CATEGORIES = [
+            { value: 'electrical', label: 'Electrical Issues' },
+            { value: 'wifi', label: 'WiFi / Internet' },
+            { value: 'laboratory', label: 'Laboratory Equipment' },
+            { value: 'hostel', label: 'Hostel Maintenance' },
+            { value: 'plumbing', label: 'Plumbing & Water' },
+            { value: 'classroom', label: 'Classroom Infrastructure' },
+            { value: 'cleanliness', label: 'Cleanliness & Hygiene' },
+            { value: 'other', label: 'Other' },
+        ];
+
+        function checkStaff() {
+            const users = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const staffList = users.filter(u => u.role === 'maintenance');
+            
+            let html = '<h2>Staff Members</h2>';
+            
+            if (staffList.length === 0) {
+                html += '<div class="error">❌ No staff members found in the system!</div>';
+            } else {
+                html += `<p>Found <strong>${staffList.length}</strong> staff member(s)</p>`;
+                html += '<table><thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Department</th><th>Assigned Categories</th></tr></thead><tbody>';
+                
+                staffList.forEach(staff => {
+                    const statusBadge = staff.status === 'active' 
+                        ? '<span class="badge badge-green">Active</span>'
+                        : '<span class="badge badge-red">Inactive</span>';
+                    
+                    const categories = staff.assignedCategories || [];
+                    const categoryLabels = categories.map(cat => {
+                        const found = ISSUE_CATEGORIES.find(c => c.value === cat);
+                        return found ? found.label : cat;
+                    }).join(', ') || '<em style="color: #94a3b8;">None assigned</em>';
+                    
+                    html += `<tr>
+                        <td><code>${staff.email}</code></td>
+                        <td>${staff.fullName}</td>
+                        <td>${statusBadge}</td>
+                        <td>${staff.department || 'N/A'}</td>
+                        <td>${categoryLabels}</td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                
+                // Check for m3@gmail.com specifically
+                const m3Staff = staffList.find(s => s.email === 'm3@gmail.com');
+                if (m3Staff) {
+                    html += '<div class="success">✅ Found m3@gmail.com staff member</div>';
+                    html += '<div class="section"><h3>m3@gmail.com Details:</h3><pre>' + JSON.stringify(m3Staff, null, 2) + '</pre></div>';
+                } else {
+                    html += '<div class="warning">⚠️ m3@gmail.com not found in staff list</div>';
+                }
+            }
+            
+            document.getElementById('output').innerHTML = html;
+        }
+
+        function testAssignment() {
+            const users = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const staffList = users.filter(u => u.role === 'maintenance');
+            const issues = JSON.parse(localStorage.getItem(ISSUES_KEY) || '[]');
+            
+            let html = '<h2>Auto-Assignment Test Results</h2>';
+            
+            ISSUE_CATEGORIES.forEach(category => {
+                const eligibleStaff = staffList.filter(staff => 
+                    staff.status === 'active' && 
+                    staff.assignedCategories && 
+                    staff.assignedCategories.includes(category.value)
+                );
+                
+                if (eligibleStaff.length > 0) {
+                    html += `<div class="success">✅ <strong>${category.label}</strong> (${category.value}): ${eligibleStaff.length} staff available - ${eligibleStaff.map(s => s.email).join(', ')}</div>`;
+                } else {
+                    html += `<div class="error">❌ <strong>${category.label}</strong> (${category.value}): No staff assigned to this category!</div>`;
+                }
+            });
+            
+            document.getElementById('output').innerHTML = html;
+        }
+
+        function checkNotifications() {
+            const notifications = JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || '[]');
+            
+            let html = '<h2>Admin Notifications</h2>';
+            
+            if (notifications.length === 0) {
+                html += '<div class="success">✅ No unassigned issue notifications</div>';
+            } else {
+                html += `<p>Found <strong>${notifications.length}</strong> notification(s)</p>`;
+                notifications.forEach(notif => {
+                    const dismissedBadge = notif.dismissed 
+                        ? '<span class="badge badge-red">Dismissed</span>'
+                        : '<span class="badge badge-blue">Active</span>';
+                    
+                    html += `<div class="section">
+                        ${dismissedBadge}
+                        <h3>${notif.categoryLabel} (${notif.category})</h3>
+                        <p><strong>Message:</strong> ${notif.message}</p>
+                        <p><strong>Issues:</strong> ${notif.issues.join(', ')}</p>
+                        <p><strong>Count:</strong> ${notif.count}</p>
+                        <p><strong>Last Occurred:</strong> ${new Date(notif.lastOccurred).toLocaleString()}</p>
+                    </div>`;
+                });
+            }
+            
+            document.getElementById('output').innerHTML = html;
+        }
+
+        // Auto-run on load
+        checkStaff();
+    </script>
+</body>
+</html>
