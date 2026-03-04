@@ -9,7 +9,7 @@ import CameraModal from '../../components/student/CameraModal';
 import { getAuthSession } from '../../utils/auth';
 import { createIssue } from '../../utils/issues';
 import { getCurrentLocation, formatLocationCoordinates } from '../../utils/location';
-import { ISSUE_CATEGORIES, ISSUE_PRIORITIES, generateIssueId, CATEGORY_TO_DEPARTMENT } from '../../constants/issues';
+import { ISSUE_CATEGORIES, ISSUE_PRIORITIES, generateIssueId } from '../../constants/issues';
 
 export default function ReportIssuePage() {
   const navigate = useNavigate();
@@ -110,7 +110,6 @@ export default function ReportIssuePage() {
       status: 'submitted',
       studentEmail: session?.email,
       studentName: session?.fullName,
-      assignedDepartment: CATEGORY_TO_DEPARTMENT[formData.category],
       remarks: [],
       supports: 0,
       supportedBy: [],

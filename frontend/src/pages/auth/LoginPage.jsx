@@ -8,6 +8,11 @@ import PasswordField from '../../components/auth/PasswordField';
 import AlertMessage from '../../components/auth/AlertMessage';
 import { loginUser, resolveRoleRedirect, setAuthSession } from '../../utils/auth';
 import { validateEmail } from '../../utils/validation';
+import { 
+  checkLoginAttempt, 
+  recordFailedLogin, 
+  clearLoginAttempts 
+} from '../../utils/loginAttempts';
 
 export default function LoginPage() {
   const location = useLocation();
@@ -18,12 +23,14 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState('error');
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: '' }));
     setMessage('');
+    setMessageType('error');
   };
 
   const validate = () => {
@@ -42,11 +49,36 @@ export default function LoginPage() {
     event.preventDefault();
     if (!validate()) return;
 
-    const result = loginUser(formData);
-    if (!result.ok) {
-      setMessage(result.message);
+    // Check if login attempt is allowed (account not locked)
+    const attemptCheck = checkLoginAttempt(formData.email);
+    if (!attemptCheck.allowed) {
+      setMessage(attemptCheck.message);
+      setMessageType('error');
       return;
     }
+
+    const result = loginUser(formData);
+    if (!result.ok) {
+      // Record failed login attempt
+      recordFailedLogin(formData.email);
+      
+      // Show attempts remaining if not pending approval
+      if (!result.pendingApproval && attemptCheck.attemptsRemaining) {
+        const remaining = attemptCheck.attemptsRemaining - 1;
+        if (remaining > 0) {
+          setMessage(`${result.message} (${remaining} attempt${remaining > 1 ? 's' : ''} remaining before account lock)`);
+        } else {
+          setMessage(`${result.message} (Warning: This is your last attempt before account lock)`);
+        }
+      } else {
+        setMessage(result.message);
+      }
+      setMessageType('error');
+      return;
+    }
+
+    // Clear login attempts on successful login
+    clearLoginAttempts(formData.email);
 
     setAuthSession(result.user);
     navigate(resolveRoleRedirect(result.user.role));
@@ -61,7 +93,7 @@ export default function LoginPage() {
         />
 
         <AlertMessage type="success" message={flashMessage} />
-        <AlertMessage message={message} />
+        <AlertMessage type={messageType} message={message} />
 
         <form className="mt-4 space-y-4" onSubmit={handleSubmit} noValidate>
           <FormField
@@ -90,14 +122,14 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-5 text-center text-sm text-slate-600">
+        <p className="mt-5 text-center text-sm text-slate-600 dark:text-slate-400">
           Don&apos;t have an account?{' '}
           <Link className="secondary-link" to="/signup/student">
             Sign Up
           </Link>
         </p>
 
-        <p className="mt-2 text-center text-sm text-slate-600">
+        <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
           Maintenance Staff?{' '}
           <Link className="secondary-link" to="/signup/maintenance">
             Register here

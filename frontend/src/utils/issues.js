@@ -96,7 +96,14 @@ export const createIssue = (payload) => {
     newIssue.assignedToName = assignedStaff.fullName;
     newIssue.assignedDepartment = assignedStaff.department;
     newIssue.assignedAt = new Date().toISOString();
+    newIssue.autoAssigned = true;
   } else {
+    newIssue.status = 'submitted';
+    newIssue.assignedTo = null;
+    newIssue.assignedToName = null;
+    newIssue.assignedDepartment = null;
+    newIssue.assignedAt = null;
+    newIssue.autoAssigned = false;
     // No staff available - notify admin
     const categoryLabel = ISSUE_CATEGORIES.find(c => c.value === payload.category)?.label || payload.category;
     addUnassignedIssueNotification(payload.id, payload.category, categoryLabel);

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, UserRound, ShieldCheck, ShieldX, Trash2 } from 'lucide-react';
+import { ArrowLeft, UserRound, ShieldCheck, ShieldX, Trash2, Eye, X, FileText, Clock, MapPin } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import AlertMessage from '../../components/auth/AlertMessage';
 import {
@@ -8,6 +8,7 @@ import {
   updateReporterStatus,
   deleteReporterAccount,
 } from '../../utils/auth';
+import { getIssues } from '../../utils/issues';
 
 export default function AdminReporterManagementPage() {
   const navigate = useNavigate();
@@ -16,8 +17,23 @@ export default function AdminReporterManagementPage() {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedReporter, setSelectedReporter] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  const reporters = useMemo(() => getReporterAccounts(), [refreshKey]);
+  const reporters = useMemo(() => {
+    const reporterList = getReporterAccounts();
+    const allIssues = getIssues();
+    
+    // Add issue count to each reporter
+    return reporterList.map(reporter => {
+      const reporterIssues = allIssues.filter(issue => issue.studentEmail === reporter.email);
+      return {
+        ...reporter,
+        issueCount: reporterIssues.length,
+        issues: reporterIssues
+      };
+    });
+  }, [refreshKey]);
 
   const filteredReporters = useMemo(() => {
     let list = [...reporters];
@@ -84,6 +100,37 @@ export default function AdminReporterManagementPage() {
     setRefreshKey((prev) => prev + 1);
   };
 
+  const handleViewDetails = (reporter) => {
+    setSelectedReporter(reporter);
+    setShowDetailsModal(true);
+  };
+
+  const closeModal = () => {
+    setShowDetailsModal(false);
+    setSelectedReporter(null);
+  };
+
+  const getStatusBadge = (status) => {
+    const configs = {
+      assigned: { label: 'Assigned', color: 'bg-amber-100 text-amber-700' },
+      in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
+      resolved: { label: 'Resolved', color: 'bg-emerald-100 text-emerald-700' },
+      submitted: { label: 'Submitted', color: 'bg-slate-100 text-slate-700' },
+    };
+    return configs[status] || configs.submitted;
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <DashboardShell
       title="Reporter Management"
@@ -115,22 +162,21 @@ export default function AdminReporterManagementPage() {
         </div>
       </div>
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative w-full sm:max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center">
+        <div className="w-full xl:flex-1">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name, email, or register number"
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
           />
         </div>
 
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:w-64"
         >
           <option value="all">All Status</option>
           <option value="active">Active</option>
@@ -146,6 +192,7 @@ export default function AdminReporterManagementPage() {
               <th className="px-4 py-3 text-left font-semibold text-slate-800">Email</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-800">Register No</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-800">Department</th>
+              <th className="px-4 py-3 text-center font-semibold text-slate-800">Issues</th>
               <th className="px-4 py-3 text-center font-semibold text-slate-800">Status</th>
               <th className="px-4 py-3 text-center font-semibold text-slate-800">Actions</th>
             </tr>
@@ -165,6 +212,12 @@ export default function AdminReporterManagementPage() {
                   <td className="px-4 py-3 text-slate-700">{reporter.registerNumber || '-'}</td>
                   <td className="px-4 py-3 text-slate-700">{reporter.department || '-'}</td>
                   <td className="px-4 py-3 text-center">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                      <FileText size={12} />
+                      {reporter.issueCount}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                         isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
@@ -176,6 +229,15 @@ export default function AdminReporterManagementPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-2">
                       <button
+                        onClick={() => handleViewDetails(reporter)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-800 transition hover:bg-blue-200"
+                        title="View reporter details and issues"
+                      >
+                        <Eye size={14} />
+                        View
+                      </button>
+                      
+                      <button
                         onClick={() => handleToggleStatus(reporter)}
                         className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                           isActive
@@ -184,7 +246,7 @@ export default function AdminReporterManagementPage() {
                         }`}
                       >
                         {isActive ? <ShieldX size={14} /> : <ShieldCheck size={14} />}
-                        {isActive ? 'Disable Login' : 'Enable Login'}
+                        {isActive ? 'Disable' : 'Enable'}
                       </button>
 
                       <button
@@ -206,6 +268,127 @@ export default function AdminReporterManagementPage() {
           <div className="p-10 text-center text-sm text-slate-600">No reporter accounts found.</div>
         )}
       </div>
+
+      {/* Reporter Details Modal */}
+      {showDetailsModal && selectedReporter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg bg-white shadow-xl">
+            {/* Modal Header */}
+            <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">{selectedReporter.fullName}</h2>
+                  <p className="text-sm text-slate-600">Reporter Details & Issues</p>
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Reporter Info Cards */}
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <p className="text-xs text-slate-600">Email</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedReporter.email}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <p className="text-xs text-slate-600">Register No</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedReporter.registerNumber || 'N/A'}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <p className="text-xs text-slate-600">Department</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedReporter.department || 'N/A'}</p>
+                </div>
+                <div className="rounded-lg bg-blue-50 p-3">
+                  <p className="text-xs text-blue-600">Total Issues</p>
+                  <p className="mt-1 text-2xl font-bold text-blue-700">{selectedReporter.issueCount}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body - Issues List */}
+            <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(90vh - 240px)' }}>
+              <h3 className="mb-4 text-lg font-semibold text-slate-900">Reported Issues</h3>
+              
+              {selectedReporter.issues.length === 0 ? (
+                <div className="py-12 text-center">
+                  <FileText size={48} className="mx-auto mb-3 text-slate-400" />
+                  <p className="text-sm text-slate-600">No issues reported yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {selectedReporter.issues
+                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                    .map((issue) => {
+                      const statusConfig = getStatusBadge(issue.status);
+                      return (
+                        <div
+                          key={issue.id}
+                          className="rounded-lg border border-slate-200 bg-white p-4 transition hover:shadow-md"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              {/* Issue Title & ID */}
+                              <div className="mb-2 flex items-start justify-between">
+                                <div>
+                                  <h4 className="font-semibold text-slate-900">{issue.title}</h4>
+                                  <p className="text-xs text-slate-500">{issue.id}</p>
+                                </div>
+                                <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${statusConfig.color}`}>
+                                  {statusConfig.label}
+                                </span>
+                              </div>
+
+                              {/* Description */}
+                              <p className="mb-3 text-sm text-slate-600 line-clamp-2">{issue.description}</p>
+
+                              {/* Issue Details */}
+                              <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 md:grid-cols-3">
+                                <div className="flex items-center gap-1">
+                                  <MapPin size={12} />
+                                  <span>{issue.location || 'No location'}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock size={12} />
+                                  <span>{formatDate(issue.createdAt)}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <FileText size={12} />
+                                  <span className="capitalize">{issue.category || 'Unknown'}</span>
+                                </div>
+                              </div>
+
+                              {/* Assigned To */}
+                              {issue.assignedTo && (
+                                <div className="mt-2 text-xs text-slate-600">
+                                  <span className="font-semibold">Assigned to:</span> {issue.assignedTo}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Issue Image */}
+                            {issue.imageUrl && (
+                              <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg">
+                                <img
+                                  src={issue.imageUrl}
+                                  alt={issue.title}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardShell>
   );
 }

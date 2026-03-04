@@ -197,32 +197,6 @@ export default function AdminDashboardPage() {
         <StatsCard label="Resolved" value={stats.resolved} icon={<CheckCircle2 size={16} />} tone="emerald" />
       </div>
 
-      <div className="mb-6 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => navigate('/admin/staff')}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            <User size={16} />
-            Staff Management
-          </button>
-          <button
-            onClick={() => navigate('/admin/staff-workload')}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-          >
-            <TrendingUp size={16} />
-            Staff Workload
-          </button>
-          <button
-            onClick={() => navigate('/admin/reporters')}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-900"
-          >
-            <User size={16} />
-            Reporter Management
-          </button>
-        </div>
-      </div>
-
       {pendingStaff.length > 0 && (
         <div className="mb-6 rounded-card border-l-4 border-amber-400 bg-amber-50 px-6 py-4 shadow-card">
           <div className="flex items-center justify-between">

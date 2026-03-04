@@ -19,6 +19,7 @@ import AdminSLAMonitoringPage from './pages/admin/AdminSLAMonitoringPage';
 import AdminStaffManagementPage from './pages/admin/AdminStaffManagementPage';
 import AdminReporterManagementPage from './pages/admin/AdminReporterManagementPage';
 import AdminStaffWorkloadPage from './pages/admin/AdminStaffWorkloadPage';
+import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 
 export default function App() {
   return (
@@ -63,6 +64,7 @@ export default function App() {
       <Route path="/admin/staff" element={<RequireRole allowedRole="admin"><AdminStaffManagementPage /></RequireRole>} />
       <Route path="/admin/staff-workload" element={<RequireRole allowedRole="admin"><AdminStaffWorkloadPage /></RequireRole>} />
       <Route path="/admin/reporters" element={<RequireRole allowedRole="admin"><AdminReporterManagementPage /></RequireRole>} />
+      <Route path="/admin/settings" element={<RequireRole allowedRole="admin"><AdminSettingsPage /></RequireRole>} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

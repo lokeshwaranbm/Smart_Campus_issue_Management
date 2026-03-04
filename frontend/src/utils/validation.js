@@ -1,10 +1,24 @@
+import { getSettingSection } from './settings';
+
 export const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+export const getPasswordMinLength = () => {
+  const securitySettings = getSettingSection('security');
+  return securitySettings?.passwordMinLength || 8;
+};
+
+export const validatePasswordLength = (password) => {
+  const minLength = getPasswordMinLength();
+  return password && password.length >= minLength;
+};
 
 export const getPasswordStrength = (password) => {
   if (!password) return { score: 0, label: 'Very weak' };
 
+  const minLength = getPasswordMinLength();
+  
   let score = 0;
-  if (password.length >= 8) score += 1;
+  if (password.length >= minLength) score += 1;
   if (/[A-Z]/.test(password)) score += 1;
   if (/[a-z]/.test(password)) score += 1;
   if (/\d/.test(password)) score += 1;

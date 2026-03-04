@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Clock, CheckCircle2, AlertTriangle, FileText, Calendar, X, ExternalLink, MapPin } from 'lucide-react';
+import { ArrowLeft, User, Clock, CheckCircle2, AlertTriangle, FileText, Calendar, X, ExternalLink, MapPin, RefreshCw } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import { getStaffAccounts } from '../../utils/auth';
 import { getIssues } from '../../utils/issues';
@@ -11,6 +11,7 @@ export default function AdminStaffWorkloadPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
   const [selectedStaff, setSelectedStaff] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const staffWorkload = useMemo(() => {
     const staff = getStaffAccounts();
@@ -67,7 +68,7 @@ export default function AdminStaffWorkloadPage() {
         assignedIssues: assignedIssues.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
       };
     });
-  }, []);
+  }, [refreshKey]);
 
   const filteredStaff = useMemo(() => {
     return staffWorkload.filter((staff) => {
@@ -130,13 +131,24 @@ export default function AdminStaffWorkloadPage() {
       subtitle="Monitor staff assignments and progress"
       roleLabel="Admin"
     >
-      <button
-        onClick={() => navigate('/dashboard/admin')}
-        className="mb-6 inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-      >
-        <ArrowLeft size={16} className="text-primary" />
-        Back to Dashboard
-      </button>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <button
+          onClick={() => navigate('/dashboard/admin')}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+        >
+          <ArrowLeft size={16} className="text-primary" />
+          Back to Dashboard
+        </button>
+        
+        <button
+          onClick={() => setRefreshKey(prev => prev + 1)}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          title="Refresh workload data"
+        >
+          <RefreshCw size={16} className="text-primary" />
+          Refresh
+        </button>
+      </div>
 
       {/* Summary Cards */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

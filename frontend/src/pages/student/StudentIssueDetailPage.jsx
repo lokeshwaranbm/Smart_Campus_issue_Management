@@ -132,7 +132,7 @@ export default function StudentIssueDetailPage() {
                 </div>
               </div>
 
-              {updatedIssue.assignedDepartment && (
+              {updatedIssue.assignedDepartment && updatedIssue.status !== 'submitted' && (
                 <div className="mt-3 rounded-lg border-l-4 border-blue-300 bg-blue-50 p-3">
                   <p className="text-xs text-blue-600">Assigned Department</p>
                   <p className="font-semibold text-blue-900">{updatedIssue.assignedDepartment}</p>

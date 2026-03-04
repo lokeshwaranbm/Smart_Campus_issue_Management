@@ -98,7 +98,7 @@ export default function IssueCard({ issue, onSupport, isSupported }) {
             <span className="font-semibold">{issue.studentName}</span> {' '}
             • {issue.studentEmail}
           </p>
-          {issue.assignedDepartment && (
+          {issue.assignedDepartment && issue.status !== 'submitted' && (
             <p className="mt-1 text-slate-500">
               Assigned to: <span className="font-semibold">{issue.assignedDepartment}</span>
             </p>

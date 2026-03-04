@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Edit2, Trash2, AlertCircle, CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
+import { Plus, Filter, Edit2, Trash2, AlertCircle, CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
+import DashboardShell from '../../components/dashboard/DashboardShell';
 import AlertMessage from '../../components/auth/AlertMessage';
 import AddStaffModal from '../../components/admin/AddStaffModal';
 import EditStaffModal from '../../components/admin/EditStaffModal';
@@ -11,6 +12,7 @@ import {
   updateStaffAccount,
   deleteStaffAccount,
 } from '../../utils/auth';
+import { getIssues } from '../../utils/issues';
 
 export default function AdminStaffManagementPage() {
   const navigate = useNavigate();
@@ -42,6 +44,8 @@ export default function AdminStaffManagementPage() {
     setLoading(true);
     try {
       const accounts = getStaffAccounts();
+      const allIssues = getIssues();
+      
       const normalized = accounts.map((entry) => {
         const categories = (entry.assignedCategories || []).map((category) => {
           if (typeof category === 'string') {
@@ -53,6 +57,24 @@ export default function AdminStaffManagementPage() {
           return null;
         }).filter(Boolean);
 
+        // Calculate real-time stats from issues
+        const staffIssues = allIssues.filter(issue => issue.assignedTo === entry.email);
+        const totalIssues = staffIssues.length;
+        const pendingIssues = staffIssues.filter(issue => 
+          issue.status === 'submitted' || issue.status === 'assigned'
+        ).length;
+        const activeIssues = staffIssues.filter(issue => 
+          issue.status === 'in-progress'
+        ).length;
+        const completedIssues = staffIssues.filter(issue => 
+          issue.status === 'resolved' || issue.status === 'closed'
+        ).length;
+        
+        // Calculate SLA compliance (simplified)
+        const slaCompliancePercent = totalIssues > 0 
+          ? Math.round((completedIssues / totalIssues) * 100) 
+          : 100;
+
         return {
           _id: entry.staffId || entry.email,
           name: entry.fullName || '',
@@ -63,11 +85,13 @@ export default function AdminStaffManagementPage() {
           assignedCategories: categories,
           isActive: entry.status === 'active',
           isSuspended: entry.status === 'inactive' || entry.status === 'suspended',
-          stats: entry.stats || {
-            completedIssues: 0,
-            activeIssues: 0,
+          stats: {
+            totalIssues,
+            pendingIssues,
+            activeIssues,
+            completedIssues,
+            slaCompliancePercent,
             overdueIssues: 0,
-            slaCompliancePercent: 100,
             averageResolutionHours: 0,
           },
         };
@@ -211,22 +235,16 @@ export default function AdminStaffManagementPage() {
   const totalPages = Math.ceil(filteredStaff.length / itemsPerPage);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
-      <div className="mx-auto max-w-7xl">
-        <button
-          onClick={() => navigate('/dashboard/admin')}
-          className="mb-6 inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-        >
-          <ArrowLeft size={16} className="text-primary" />
-          Back to Dashboard
-        </button>
-
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">Staff Management</h1>
-            <p className="mt-2 text-slate-600">Manage maintenance staff and assign categories</p>
-          </div>
+    <DashboardShell title="Staff Management" subtitle="Manage maintenance staff and assign categories" roleLabel="Admin">
+      <>
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => navigate('/dashboard/admin')}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            <ArrowLeft size={16} className="text-primary" />
+            Back to Dashboard
+          </button>
           <button
             onClick={() => setShowAddModal(true)}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -239,50 +257,49 @@ export default function AdminStaffManagementPage() {
         <AlertMessage type={messageType} message={message} />
 
         {/* Filters */}
-        <div className="mb-6 flex flex-wrap gap-4">
-          <div className="flex-1 min-w-80">
-            <div className="relative">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="w-full xl:flex-1">
               <input
                 type="text"
                 placeholder="Search by name, email, or phone..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
+
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none sm:w-56"
+            >
+              <option value="all">All Departments</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Electrical">Electrical</option>
+              <option value="Plumbing">Plumbing</option>
+              <option value="Network">Network</option>
+              <option value="Facilities">Facilities</option>
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none sm:w-44"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="inactive">Inactive</option>
+            </select>
+
+            <button
+              onClick={() => setUsesPagination(!usesPagination)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50 sm:w-auto"
+            >
+              {usesPagination ? 'Show All' : 'Paginate'}
+            </button>
           </div>
-
-          <select
-            value={departmentFilter}
-            onChange={(e) => setDepartmentFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            <option value="all">All Departments</option>
-            <option value="Maintenance">Maintenance</option>
-            <option value="Electrical">Electrical</option>
-            <option value="Plumbing">Plumbing</option>
-            <option value="Network">Network</option>
-            <option value="Facilities">Facilities</option>
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
-            <option value="inactive">Inactive</option>
-          </select>
-
-          <button
-            onClick={() => setUsesPagination(!usesPagination)}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
-          >
-            {usesPagination ? 'Show All' : 'Paginate'}
-          </button>
         </div>
 
         {/* Staff Table */}
@@ -297,7 +314,7 @@ export default function AdminStaffManagementPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-md">
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-card">
               <table className="w-full">
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr className="text-xs font-semibold uppercase text-slate-600">
@@ -306,9 +323,10 @@ export default function AdminStaffManagementPage() {
                     <th className="px-4 py-3 text-left">Phone</th>
                     <th className="px-4 py-3 text-left">Department</th>
                     <th className="px-4 py-3 text-center">Categories</th>
-                    <th className="px-4 py-3 text-center">Active Issues</th>
-                    <th className="px-4 py-3 text-center">Completed</th>
-                    <th className="px-4 py-3 text-center">SLA %</th>
+                    <th className="px-4 py-3 text-center">Total</th>
+                    <th className="px-4 py-3 text-center">Pending</th>
+                    <th className="px-4 py-3 text-center">Active</th>
+                    <th className="px-4 py-3 text-center">Done</th>
                     <th className="px-4 py-3 text-center">Status</th>
                     <th className="px-4 py-3 text-center">Actions</th>
                   </tr>
@@ -326,22 +344,21 @@ export default function AdminStaffManagementPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center text-sm font-semibold text-slate-900">
-                        {staffMember.stats?.activeIssues || 0}
+                        {staffMember.stats?.totalIssues || 0}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-slate-600">
-                        {staffMember.stats?.completedIssues || 0}
+                      <td className="px-4 py-3 text-center text-sm">
+                        <span className="font-semibold text-yellow-600">
+                          {staffMember.stats?.pendingIssues || 0}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-sm font-semibold">
-                        <span
-                          className={`${
-                            (staffMember.stats?.slaCompliancePercent || 0) >= 90
-                              ? 'text-green-600'
-                              : (staffMember.stats?.slaCompliancePercent || 0) >= 70
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                          }`}
-                        >
-                          {staffMember.stats?.slaCompliancePercent || 0}%
+                      <td className="px-4 py-3 text-center text-sm">
+                        <span className="font-semibold text-blue-600">
+                          {staffMember.stats?.activeIssues || 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm">
+                        <span className="font-semibold text-green-600">
+                          {staffMember.stats?.completedIssues || 0}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center text-sm">
@@ -427,25 +444,25 @@ export default function AdminStaffManagementPage() {
             )}
           </>
         )}
-      </div>
 
-      {/* Modals */}
-      {showAddModal && (
-        <AddStaffModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddStaff}
-          categoryOptions={categoryOptions}
-        />
-      )}
+        {/* Modals */}
+        {showAddModal && (
+          <AddStaffModal
+            onClose={() => setShowAddModal(false)}
+            onAdd={handleAddStaff}
+            categoryOptions={categoryOptions}
+          />
+        )}
 
-      {showEditModal && selectedStaff && (
-        <EditStaffModal
-          staff={selectedStaff}
-          onClose={() => setShowEditModal(false)}
-          onUpdate={handleUpdateStaff}
-          categoryOptions={categoryOptions}
-        />
-      )}
-    </div>
+        {showEditModal && selectedStaff && (
+          <EditStaffModal
+            staff={selectedStaff}
+            onClose={() => setShowEditModal(false)}
+            onUpdate={handleUpdateStaff}
+            categoryOptions={categoryOptions}
+          />
+        )}
+      </>
+    </DashboardShell>
   );
 }
