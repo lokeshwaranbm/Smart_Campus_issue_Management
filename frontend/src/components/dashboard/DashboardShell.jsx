@@ -191,9 +191,36 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
           </div>
         </div>
 
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="border-t border-slate-200 bg-white px-4 py-2 sm:px-6 lg:hidden">
+        {/* Mobile Side Drawer */}
+        <div
+          className={`fixed inset-0 z-40 bg-slate-900/40 transition-opacity duration-200 lg:hidden ${
+            mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={() => setMobileMenuOpen(false)}
+        />
+
+        <aside
+          className={`fixed right-0 top-0 z-50 h-full w-80 max-w-[85vw] border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 lg:hidden ${
+            mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 shadow-md">
+                <Briefcase size={16} className="text-white" />
+              </div>
+              <span className="text-sm font-bold text-slate-900">Smart Campus</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="h-[calc(100%-73px)] overflow-y-auto p-4">
             <div className="space-y-1">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
@@ -223,7 +250,6 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
                         />
                       </button>
 
-                      {/* Mobile Dropdown */}
                       {openDropdown === item.label && (
                         <div className="space-y-1 bg-slate-50 py-1">
                           {item.dropdown.map((dropdownItem) => (
@@ -261,9 +287,8 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
                 );
               })}
 
-              {/* Mobile Role and Logout */}
-              <div className="border-t border-slate-200 py-2">
-                <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 mb-2">
+              <div className="mt-3 border-t border-slate-200 pt-3">
+                <div className="mb-2 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
                   <UserCog size={14} className="text-primary" />
                   <span className="text-xs font-semibold text-primary">{roleLabel}</span>
                 </div>
@@ -278,7 +303,7 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
               </div>
             </div>
           </div>
-        )}
+        </aside>
       </nav>
 
       {/* Page Header */}

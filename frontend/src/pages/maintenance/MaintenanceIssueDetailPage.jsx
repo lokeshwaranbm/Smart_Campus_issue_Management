@@ -1,13 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Send, CheckCircle2, MapPin, ExternalLink } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
-import FormField from '../../components/auth/FormField';
 import SelectField from '../../components/auth/SelectField';
 import AlertMessage from '../../components/auth/AlertMessage';
 import { getIssueById, updateIssueStatus, addIssueRemark } from '../../utils/issues';
 import { getAuthSession } from '../../utils/auth';
 import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
+import {
+  parseLocationCoordinates,
+  getLocationMapUrl,
+  getLocationEmbedUrl,
+  formatLocationCoordinates,
+} from '../../utils/location';
 
 export default function MaintenanceIssueDetailPage() {
   const { issueId } = useParams();
@@ -68,8 +73,9 @@ export default function MaintenanceIssueDetailPage() {
 
   const priorityColor = ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.color || '';
   const statusLabel = ISSUE_STATUS.find((s) => s.value === issue.status)?.label || issue.status;
-
-  const canResolve = issue.status !== 'resolved';
+  const coordinates = parseLocationCoordinates(issue.location);
+  const mapUrl = coordinates ? getLocationMapUrl(coordinates.latitude, coordinates.longitude) : '';
+  const mapEmbedUrl = coordinates ? getLocationEmbedUrl(coordinates.latitude, coordinates.longitude) : '';
 
   return (
     <DashboardShell title={`Issue: ${issue.id}`} subtitle={issue.title} roleLabel="Maintenance">
@@ -103,6 +109,40 @@ export default function MaintenanceIssueDetailPage() {
                 <p className="text-xs font-medium uppercase text-slate-500">Location</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">{issue.location}</p>
               </div>
+
+              {coordinates && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-slate-800">
+                      <MapPin size={16} className="text-primary" />
+                      <p className="text-sm font-semibold">Location Tracker</p>
+                    </div>
+                    <a
+                      href={mapUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                    >
+                      Open in Maps
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                  <p className="mb-2 text-xs text-slate-500">
+                    Coordinates: {formatLocationCoordinates(coordinates.latitude, coordinates.longitude)}
+                  </p>
+                  <iframe
+                    title={`Issue ${issue.id} map view`}
+                    src={mapEmbedUrl}
+                    className="h-52 w-full rounded-md border border-slate-200"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              )}
+
+              {!coordinates && issue.location && (
+                <p className="text-xs text-slate-500">Map preview unavailable for this location format.</p>
+              )}
 
               <div>
                 <p className="text-xs font-medium uppercase text-slate-500">Reported By</p>

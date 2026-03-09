@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, Clock, CheckCircle2, AlertTriangle, FileText, Calendar, X, ExternalLink, MapPin, RefreshCw } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
@@ -12,6 +12,30 @@ export default function AdminStaffWorkloadPage() {
   const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Auto-refresh when localStorage changes (e.g., when issues are updated)
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      if (event.key === 'smart-campus-issues') {
+        setRefreshKey((prev) => prev + 1);
+      }
+    };
+
+    // Refresh when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setRefreshKey((prev) => prev + 1);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const staffWorkload = useMemo(() => {
     const staff = getStaffAccounts();
@@ -123,6 +147,8 @@ export default function AdminStaffWorkloadPage() {
 
   const closeModal = () => {
     setSelectedStaff(null);
+    // Refresh data when modal is closed, in case issues were updated
+    setRefreshKey((prev) => prev + 1);
   };
 
   return (

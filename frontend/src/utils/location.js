@@ -42,3 +42,22 @@ export const formatLocationCoordinates = (latitude, longitude) => {
 export const getLocationMapUrl = (latitude, longitude) => {
   return `https://www.google.com/maps/search/${latitude},${longitude}`;
 };
+
+export const parseLocationCoordinates = (value) => {
+  if (!value || typeof value !== 'string') return null;
+
+  const parts = value.split(',').map((part) => part.trim());
+  if (parts.length !== 2) return null;
+
+  const latitude = Number.parseFloat(parts[0]);
+  const longitude = Number.parseFloat(parts[1]);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+
+  return { latitude, longitude };
+};
+
+export const getLocationEmbedUrl = (latitude, longitude) => {
+  return `https://maps.google.com/maps?q=${latitude},${longitude}&z=17&t=k&output=embed`;
+};
