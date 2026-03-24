@@ -25,10 +25,7 @@ Backend (Express/Node) → Render
 1. Go to [MongoDB Atlas](https://mongodb.com/cloud/atlas)
 2. Create a free cluster
 3. Create a database user with username and password
-4. Get your connection string:
-   ```
-   mongodb+srv://username:password@cluster.mongodb.net/smart-campus?retryWrites=true&w=majority
-   ```
+4. Get your connection string from MongoDB Atlas (keep it safe, don't share publicly)
 5. Save this connection string for later
 
 ## Step 2: Deploy Backend to Render

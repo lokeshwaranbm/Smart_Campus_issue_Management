@@ -99,7 +99,7 @@ VITE_API_BASE_URL=https://smart-campus-backend.onrender.com
 ```
 NODE_ENV=production
 PORT=5000
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/smart-campus
+MONGODB_URI=[your-mongodb-atlas-connection-string]
 CORS_ORIGIN=https://your-app.netlify.app
 ```
 

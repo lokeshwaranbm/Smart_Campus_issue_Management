@@ -282,7 +282,7 @@ Visit: `http://localhost:5174`
 # Database
 MONGODB_URI=mongodb://localhost:27017/smart-campus
 # or for MongoDB Atlas:
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/smart-campus
+MONGODB_URI=[your-mongodb-atlas-connection-string]
 
 # Server
 PORT=5000

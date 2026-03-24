@@ -21,7 +21,7 @@
   ```
   NODE_ENV=production
   PORT=5000
-  MONGODB_URI=[your MongoDB connection string from Step 1]
+  MONGODB_URI=[your-mongodb-uri]
   CORS_ORIGIN=[you'll update this after Netlify deploy]
   ```
 - [ ] Click Deploy
@@ -63,7 +63,7 @@
 ```
 NODE_ENV=production
 PORT=5000
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/smart-campus...
+MONGODB_URI=[your-mongodb-atlas-connection-string]
 CORS_ORIGIN=https://your-netlify-app.netlify.app
 ```
 
