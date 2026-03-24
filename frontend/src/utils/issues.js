@@ -1,323 +1,156 @@
-import { getStaffAccounts } from './auth';
-import { addUnassignedIssueNotification } from './notifications';
-import { ISSUE_CATEGORIES } from '../constants/issues';
+import { apiFetch } from './apiConfig';
 
-const ISSUES_KEY = 'smart-campus-issues';
-
-const emptyIssuesDb = [];
-
-const seedIssues = () => {
-  const existing = localStorage.getItem(ISSUES_KEY);
-  if (!existing) {
-    localStorage.setItem(ISSUES_KEY, JSON.stringify(emptyIssuesDb));
-  }
+// Parse a fetch Response — throws on non-ok HTTP status.
+const parseResponse = async (response) => {
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.message || 'Request failed');
+  return data;
 };
 
-export const getIssues = () => {
-  seedIssues();
-  return JSON.parse(localStorage.getItem(ISSUES_KEY) || '[]');
+// ── List / Query ─────────────────────────────────────────────────────────────
+
+// Returns: array of issue objects
+export const getIssues = async (filters = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const response = await apiFetch(`/api/issues${qs}`, { method: 'GET' });
+  return parseResponse(response);
 };
 
-export const saveIssues = (issues) => {
-  localStorage.setItem(ISSUES_KEY, JSON.stringify(issues));
+// Returns: single issue object
+export const getIssueById = async (issueId) => {
+  const response = await apiFetch(`/api/issues/${issueId}`, { method: 'GET' });
+  return parseResponse(response);
 };
 
-/**
- * Permanently deletes an issue from the system
- * @param {string} issueId - The ID of the issue to delete
- * @returns {object} Result object with ok status
- */
-export const deleteIssue = (issueId) => {
-  const issues = getIssues();
-  const filteredIssues = issues.filter((issue) => issue.id !== issueId);
-  saveIssues(filteredIssues);
-  return { ok: true, message: 'Issue deleted successfully' };
+export const getIssuesByStudent = async (studentEmail) => {
+  return getIssues({ studentEmail });
 };
 
-/**
- * Automatically assigns an issue to the best available staff member
- * Uses load balancing based on active issues count
- */
-export const autoAssignIssue = (category) => {
-  const staffList = getStaffAccounts();
-  const issues = getIssues();
-  
-  // Filter staff who are active and have this category assigned
-  const eligibleStaff = staffList.filter(
-    (staff) => 
-      staff.status === 'active' && 
-      staff.assignedCategories && 
-      staff.assignedCategories.includes(category)
-  );
-  
-  if (eligibleStaff.length === 0) {
-    return null; // No staff available for this category
-  }
-  
-  // Count active issues for each staff member
-  const staffWorkload = eligibleStaff.map((staff) => {
-    const activeIssues = issues.filter(
-      (issue) => 
-        issue.assignedTo === staff.email &&
-        issue.status !== 'resolved' &&
-        issue.status !== 'closed'
-    ).length;
-    
-    return {
-      email: staff.email,
-      fullName: staff.fullName,
-      department: staff.department,
-      activeIssues,
-    };
-  });
-  
-  // Sort by active issues (ascending) and return the one with least workload
-  staffWorkload.sort((a, b) => a.activeIssues - b.activeIssues);
-  
-  return staffWorkload[0];
+export const getIssuesByDepartment = async (department) => {
+  return getIssues({ assignedDepartment: department });
 };
 
-export const createIssue = (payload) => {
-  const issues = getIssues();
-  
-  // Auto-assign to staff if available
-  const assignedStaff = autoAssignIssue(payload.category);
-  
-  const newIssue = {
-    ...payload,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  
-  // If staff found, assign immediately
-  if (assignedStaff) {
-    newIssue.status = 'assigned';
-    newIssue.assignedTo = assignedStaff.email;
-    newIssue.assignedToName = assignedStaff.fullName;
-    newIssue.assignedDepartment = assignedStaff.department;
-    newIssue.assignedAt = new Date().toISOString();
-    newIssue.autoAssigned = true;
-  } else {
-    newIssue.status = 'submitted';
-    newIssue.assignedTo = null;
-    newIssue.assignedToName = null;
-    newIssue.assignedDepartment = null;
-    newIssue.assignedAt = null;
-    newIssue.autoAssigned = false;
-    // No staff available - notify admin
-    const categoryLabel = ISSUE_CATEGORIES.find(c => c.value === payload.category)?.label || payload.category;
-    addUnassignedIssueNotification(payload.id, payload.category, categoryLabel);
-  }
-  
-  issues.push(newIssue);
-  saveIssues(issues);
-  return newIssue;
+export const getPublicIssueFeed = async () => {
+  return getIssues();
 };
 
-export const getIssueById = (issueId) => {
-  const issues = getIssues();
-  return issues.find((issue) => issue.id === issueId);
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+// Returns: { total, submitted, assigned, inProgress, resolved, closed }
+export const getIssueStats = async () => {
+  const response = await apiFetch('/api/issues/stats', { method: 'GET' });
+  return parseResponse(response);
 };
 
-export const getIssuesByStudent = (studentEmail) => {
-  const issues = getIssues();
-  return issues.filter((issue) => issue.studentEmail === studentEmail);
-};
-
-export const getIssuesByDepartment = (department) => {
-  const issues = getIssues();
-  return issues.filter((issue) => issue.assignedDepartment === department);
-};
-
-export const updateIssueStatus = (issueId, newStatus, updatedBy = 'system') => {
-  const issues = getIssues();
-  const issue = issues.find((i) => i.id === issueId);
-
-  if (!issue) return { ok: false, message: 'Issue not found.' };
-
-  issue.status = newStatus;
-  issue.updatedAt = new Date().toISOString();
-  issue.lastUpdatedBy = updatedBy;
-
-  saveIssues(issues);
-  return { ok: true, issue };
-};
-
-export const addIssueRemark = (issueId, remark, authorEmail) => {
-  const issues = getIssues();
-  const issue = issues.find((i) => i.id === issueId);
-
-  if (!issue) return { ok: false, message: 'Issue not found.' };
-
-  if (!issue.remarks) issue.remarks = [];
-  issue.remarks.push({
-    text: remark,
-    authorEmail,
-    timestamp: new Date().toISOString(),
-  });
-
-  issue.updatedAt = new Date().toISOString();
-  saveIssues(issues);
-  return { ok: true, issue };
-};
-
-export const assignIssue = (issueId, department, assignedTo) => {
-  const issues = getIssues();
-  const issue = issues.find((i) => i.id === issueId);
-
-  if (!issue) return { ok: false, message: 'Issue not found.' };
-
-  issue.status = 'assigned';
-  issue.assignedDepartment = department;
-  issue.assignedTo = assignedTo;
-  issue.assignedAt = new Date().toISOString();
-  issue.updatedAt = new Date().toISOString();
-
-  saveIssues(issues);
-  return { ok: true, issue };
-};
-
-export const getIssueStats = () => {
-  const issues = getIssues();
-
-  return {
-    total: issues.length,
-    submitted: issues.filter((i) => i.status === 'submitted').length,
-    assigned: issues.filter((i) => i.status === 'assigned').length,
-    inProgress: issues.filter((i) => i.status === 'in_progress').length,
-    resolved: issues.filter((i) => i.status === 'resolved').length,
-  };
-};
-
-export const getCategoryStats = () => {
-  const issues = getIssues();
+// These are pure computed helpers — callers pass the already-loaded issues array.
+export const getCategoryStats = (issues) => {
   const stats = {};
-
   issues.forEach((issue) => {
-    if (!stats[issue.category]) {
-      stats[issue.category] = 0;
-    }
-    stats[issue.category]++;
+    stats[issue.category] = (stats[issue.category] || 0) + 1;
   });
-
   return stats;
 };
 
-export const getDepartmentStats = () => {
-  const issues = getIssues();
+export const getDepartmentStats = (issues) => {
   const stats = {};
-
   issues.forEach((issue) => {
     if (issue.assignedDepartment) {
-      if (!stats[issue.assignedDepartment]) {
-        stats[issue.assignedDepartment] = 0;
-      }
-      stats[issue.assignedDepartment]++;
+      stats[issue.assignedDepartment] = (stats[issue.assignedDepartment] || 0) + 1;
     }
   });
-
   return stats;
 };
 
-export const calculatePriority = (supportsCount) => {
-  if (supportsCount >= 31) return 'high';
-  if (supportsCount >= 11) return 'medium';
-  return 'low';
+// ── Mutations ─────────────────────────────────────────────────────────────────
+
+// Returns: created issue object
+export const createIssue = async (payload) => {
+  const response = await apiFetch('/api/issues', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return parseResponse(response);
 };
 
-export const addSupport = (issueId, userEmail) => {
-  const issues = getIssues();
-  const issue = issues.find((i) => i.id === issueId);
-
-  if (!issue) return { ok: false, message: 'Issue not found.' };
-
-  if (!issue.supports) issue.supports = [];
-  if (!issue.supportedBy) issue.supportedBy = [];
-
-  const alreadySupported = issue.supportedBy.includes(userEmail);
-  if (alreadySupported) {
-    return { ok: false, message: 'You already support this issue.' };
-  }
-
-  issue.supportedBy.push(userEmail);
-  issue.supports = issue.supportedBy.length;
-  issue.priority = calculatePriority(issue.supports);
-  issue.updatedAt = new Date().toISOString();
-
-  saveIssues(issues);
-  return { ok: true, issue };
+// Returns: { message } on success, throws on failure
+export const deleteIssue = async (issueId) => {
+  const response = await apiFetch(`/api/issues/${issueId}`, { method: 'DELETE' });
+  return parseResponse(response);
 };
 
-export const removeSupport = (issueId, userEmail) => {
-  const issues = getIssues();
-  const issue = issues.find((i) => i.id === issueId);
-
-  if (!issue) return { ok: false, message: 'Issue not found.' };
-
-  if (!issue.supportedBy) issue.supportedBy = [];
-
-  const index = issue.supportedBy.indexOf(userEmail);
-  if (index > -1) {
-    issue.supportedBy.splice(index, 1);
-  }
-
-  issue.supports = issue.supportedBy.length;
-  issue.priority = calculatePriority(issue.supports);
-  issue.updatedAt = new Date().toISOString();
-
-  saveIssues(issues);
-  return { ok: true, issue };
+// Returns: updated issue object
+export const updateIssueStatus = async (issueId, newStatus, updatedBy = 'system') => {
+  const response = await apiFetch(`/api/issues/${issueId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: newStatus, updatedBy }),
+  });
+  return parseResponse(response);
 };
 
-export const hasUserSupported = (issueId, userEmail) => {
-  const issues = getIssues();
-  const issue = issues.find((i) => i.id === issueId);
+// Returns: updated issue object
+export const addIssueRemark = async (issueId, remark, authorEmail) => {
+  const response = await apiFetch(`/api/issues/${issueId}/remarks`, {
+    method: 'POST',
+    body: JSON.stringify({ text: remark, authorEmail }),
+  });
+  return parseResponse(response);
+};
 
-  if (!issue) return false;
-  if (!issue.supportedBy) return false;
+// Returns: updated issue object
+export const assignIssue = async (issueId, department, assignedTo) => {
+  const response = await apiFetch(`/api/issues/${issueId}/assign`, {
+    method: 'PATCH',
+    body: JSON.stringify({ department, assignedTo }),
+  });
+  return parseResponse(response);
+};
 
+// Returns: updated issue object (for setIssue(updated) pattern)
+export const addComment = async (issueId, commentText, userEmail, userName) => {
+  const response = await apiFetch(`/api/issues/${issueId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ text: commentText, userEmail, userName }),
+  });
+  return parseResponse(response);
+};
+
+// Toggle support — both addSupport and removeSupport hit the same toggle endpoint.
+// Returns: { issue, added } — callers can use result.issue to update state.
+export const addSupport = async (issueId, userEmail) => {
+  const response = await apiFetch(`/api/issues/${issueId}/support`, {
+    method: 'POST',
+    body: JSON.stringify({ userEmail }),
+  });
+  return parseResponse(response);
+};
+
+export const removeSupport = async (issueId, userEmail) => {
+  const response = await apiFetch(`/api/issues/${issueId}/support`, {
+    method: 'POST',
+    body: JSON.stringify({ userEmail }),
+  });
+  return parseResponse(response);
+};
+
+// ── Pure sync helpers ─────────────────────────────────────────────────────────
+
+// Caller passes the full issue object (already loaded), not just the id.
+export const hasUserSupported = (issue, userEmail) => {
+  if (!issue || !issue.supportedBy) return false;
   return issue.supportedBy.includes(userEmail);
 };
 
-export const addComment = (issueId, commentText, userEmail, userName) => {
-  const issues = getIssues();
-  const issue = issues.find((i) => i.id === issueId);
-
-  if (!issue) return { ok: false, message: 'Issue not found.' };
-
-  if (!issue.comments) issue.comments = [];
-
-  const newComment = {
-    id: `comment-${Date.now()}`,
-    text: commentText,
-    userEmail,
-    userName,
-    createdAt: new Date().toISOString(),
-  };
-
-  issue.comments.push(newComment);
-  issue.updatedAt = new Date().toISOString();
-
-  saveIssues(issues);
-  return { ok: true, comment: newComment };
+export const calculatePriority = (supportsCount) => {
+  if (supportsCount >= 20) return 'critical';
+  if (supportsCount >= 10) return 'high';
+  if (supportsCount >= 5) return 'medium';
+  return 'low';
 };
 
-export const getComments = (issueId) => {
-  const issues = getIssues();
-  const issue = issues.find((i) => i.id === issueId);
-
-  if (!issue) return [];
-  return issue.comments || [];
+// getComments is now derived from the issue object returned by getIssueById.
+export const getComments = (issue) => {
+  return issue?.comments ?? [];
 };
 
-export const getPublicIssueFeed = () => {
-  const issues = getIssues();
-  return issues
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map((issue) => ({
-      ...issue,
-      supports: issue.supports || 0,
-      priority: issue.priority || calculatePriority(issue.supports || 0),
-      commentsCount: (issue.comments || []).length,
-    }));
-};

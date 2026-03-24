@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, AlertCircle, Clock, User, Zap, ArrowRight, ArrowLeft } from 'lucide-react';
 import AlertMessage from '../../components/auth/AlertMessage';
+import { apiFetch } from '../../utils/apiConfig';
 
 export default function AdminSLAMonitoringPage() {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ export default function AdminSLAMonitoringPage() {
 
   const fetchOverdueIssues = async () => {
     try {
-      const response = await fetch('/api/admin/overdue-issues');
+      const response = await apiFetch('/api/admin/overdue-issues');
       const result = await response.json();
 
       if (result.ok) {
@@ -42,7 +43,7 @@ export default function AdminSLAMonitoringPage() {
 
   const fetchSLAStats = async () => {
     try {
-      const response = await fetch('/api/admin/sla-stats');
+      const response = await apiFetch('/api/admin/sla-stats');
       const result = await response.json();
 
       if (result.ok) {
@@ -55,12 +56,17 @@ export default function AdminSLAMonitoringPage() {
 
   const fetchStaffList = async () => {
     try {
-      // TODO: Replace with actual API call from staff endpoints
-      setStaffList([
-        { id: 1, name: 'John Maintenance', email: 'john@uni.edu' },
-        { id: 2, name: 'Jane Electrician', email: 'jane@uni.edu' },
-        { id: 3, name: 'Bob Plumber', email: 'bob@uni.edu' },
-      ]);
+      const response = await apiFetch('/api/admin/staff?status=active');
+      const result = await response.json();
+
+      if (result.ok) {
+        const normalizedStaff = (result.data || []).map((staff) => ({
+          id: staff._id || staff.id,
+          name: staff.name,
+          email: staff.email,
+        }));
+        setStaffList(normalizedStaff);
+      }
     } catch (error) {
       setMessage('Failed to load staff: ' + error.message);
     }
@@ -75,9 +81,8 @@ export default function AdminSLAMonitoringPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`/api/issues/${issueId}/reassign`, {
+      const response = await apiFetch(`/api/issues/${issueId}/reassign`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           newStaffId,
           reason: reassignReason,

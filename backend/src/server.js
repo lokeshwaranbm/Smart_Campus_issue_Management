@@ -1,44 +1,48 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import { authRouter } from './routes/auth.routes.js';
 import { categoryRouter } from './routes/categories.routes.js';
 import { staffRouter } from './routes/staff.routes.js';
+import { issueRouter } from './routes/issues.routes.js';
+import { settingsRouter } from './routes/settings.routes.js';
 import { initializeSLAJobs, stopSLAJobs } from './jobs/slaMonitor.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/smart-campus';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/smart-campus';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// ============ DATABASE CONNECTION ============
 let mongoConnection = null;
 let slaJobs = null;
+let activeMongoUri = MONGODB_URI;
+let server = null;
+
+app.use(
+  cors({
+    origin: CORS_ORIGIN.split(',').map((o) => o.trim()),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+app.use(express.json());
 
 const connectDatabase = async () => {
   try {
-    mongoConnection = await mongoose.connect(MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
+    mongoConnection = await mongoose.connect(MONGODB_URI);
+    activeMongoUri = MONGODB_URI;
     console.log('✅ MongoDB connected successfully');
-
-    // Initialize SLA monitoring jobs after DB connection
-    slaJobs = initializeSLAJobs();
   } catch (error) {
     console.error('❌ Failed to connect MongoDB:', error.message);
-    process.exit(1);
+    throw new Error('Database connection failed. Set a valid MONGODB_URI for your real MongoDB instance.');
   }
+
+  // Initialize SLA monitoring jobs after DB connection
+  slaJobs = initializeSLAJobs();
 };
 
-// Connect to database on startup
-connectDatabase();
-
-// ============ HEALTH CHECK ============
 app.get('/api/health', (_, res) => {
   res.status(200).json({
     ok: true,
@@ -48,12 +52,12 @@ app.get('/api/health', (_, res) => {
   });
 });
 
-// ============ ROUTES ============
 app.use('/api/auth', authRouter);
 app.use('/api', categoryRouter);
 app.use('/api', staffRouter);
+app.use('/api', issueRouter);
+app.use('/api', settingsRouter);
 
-// ============ ERROR HANDLING ============
 app.use((err, req, res, next) => {
   console.error('💥 Unhandled error:', err);
   res.status(500).json({
@@ -63,30 +67,47 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ============ GRACEFUL SHUTDOWN ============
-process.on('SIGTERM', async () => {
-  console.log('🛑 SIGTERM received. Shutting down gracefully...');
+const shutdown = async (signal) => {
+  console.log(`🛑 ${signal} received. Shutting down gracefully...`);
 
-  // Stop background jobs
   if (slaJobs) {
     stopSLAJobs(slaJobs);
   }
 
-  // Close database connection
   if (mongoConnection) {
     await mongoose.disconnect();
     console.log('✅ MongoDB connection closed');
   }
 
-  // Close server
-  server.close(() => {
-    console.log('✅ Server shut down');
-    process.exit(0);
-  });
+  if (server) {
+    server.close(() => {
+      console.log('✅ Server shut down');
+      process.exit(0);
+    });
+    return;
+  }
+
+  process.exit(0);
+};
+
+process.on('SIGTERM', async () => {
+  await shutdown('SIGTERM');
 });
 
-// ============ START SERVER ============
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Backend running on http://localhost:${PORT}`);
-  console.log(`📊 Database: ${MONGODB_URI}`);
+process.on('SIGINT', async () => {
+  await shutdown('SIGINT');
+});
+
+const startServer = async () => {
+  await connectDatabase();
+
+  server = app.listen(PORT, () => {
+    console.log(`🚀 Backend running on http://localhost:${PORT}`);
+    console.log(`📊 Database: ${activeMongoUri}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('💥 Failed to start backend:', error.message);
+  process.exit(1);
 });

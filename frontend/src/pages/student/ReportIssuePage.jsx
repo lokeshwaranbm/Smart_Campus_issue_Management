@@ -117,7 +117,7 @@ export default function ReportIssuePage() {
     };
 
     try {
-      const issue = createIssue(issuePayload);
+      const issue = await createIssue(issuePayload);
       setLoading(false);
       
       // Create appropriate success message based on assignment status

@@ -1,43 +1,26 @@
-const STORAGE_KEY = 'smart-campus-users';
+import { apiFetch } from './apiConfig';
+
 const SESSION_KEY = 'smart-campus-session';
 
-const defaultUsers = [
-  {
-    fullName: 'System Administrator',
-    email: 'admin@university.edu',
-    password: 'Admin@123',
-    role: 'admin',
-    status: 'active',
-  },
-];
+export const registerUser = async (payload) => {
+  const endpoint =
+    payload.role === 'maintenance' ? '/api/auth/register/maintenance' : '/api/auth/register/student';
 
-const seedUsers = () => {
-  const existing = localStorage.getItem(STORAGE_KEY);
-  if (!existing) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultUsers));
+  try {
+    const response = await apiFetch(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+
+    if (!response.ok || !result?.ok) {
+      return { ok: false, message: result?.message || 'Registration failed.' };
+    }
+
+    return { ok: true, user: result.data };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
   }
-};
-
-export const getUsers = () => {
-  seedUsers();
-  return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-};
-
-export const saveUsers = (users) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
-};
-
-export const registerUser = (payload) => {
-  const users = getUsers();
-  const exists = users.some((user) => user.email.toLowerCase() === payload.email.toLowerCase());
-
-  if (exists) {
-    return { ok: false, message: 'An account with this email already exists.' };
-  }
-
-  users.push(payload);
-  saveUsers(users);
-  return { ok: true };
 };
 
 export const detectRoleFromEmail = (email) => {
@@ -54,28 +37,26 @@ export const detectRoleFromEmail = (email) => {
   return 'student';
 };
 
-export const loginUser = ({ email, password }) => {
-  const users = getUsers();
+export const loginUser = async ({ email, password }) => {
+  try {
+    const response = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    const result = await response.json();
 
-  const user = users.find(
-    (entry) =>
-      entry.email.toLowerCase() === email.toLowerCase() &&
-      entry.password === password
-  );
+    if (!response.ok || !result?.ok) {
+      return {
+        ok: false,
+        message: result?.message || 'Invalid email, password, or account not found.',
+        pendingApproval: Boolean(result?.pendingApproval),
+      };
+    }
 
-  if (!user) {
-    return { ok: false, message: 'Invalid email, password, or account not found.' };
+    return { ok: true, user: result.data.user, redirectTo: result.data.redirectTo };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
   }
-
-  if (user.role === 'maintenance' && user.status !== 'active') {
-    return { ok: false, message: 'Account pending admin approval.', pendingApproval: true };
-  }
-
-  if (user.role === 'student' && user.status !== 'active') {
-    return { ok: false, message: 'Reporter account is disabled. Please contact admin.' };
-  }
-
-  return { ok: true, user };
 };
 
 export const resolveRoleRedirect = (role) => {
@@ -111,159 +92,207 @@ export const clearAuthSession = () => {
   localStorage.removeItem(SESSION_KEY);
 };
 
-export const getPendingMaintenanceStaff = () => {
-  const users = getUsers();
-  return users.filter((u) => u.role === 'maintenance' && u.status === 'pending_approval');
+export const getPendingMaintenanceStaff = async () => {
+  try {
+    const response = await apiFetch('/api/auth/maintenance/pending');
+    const result = await response.json();
+    if (!response.ok || !result?.ok) return [];
+    return result.data || [];
+  } catch {
+    return [];
+  }
 };
 
-export const approveMaintenanceStaff = (email) => {
-  const users = getUsers();
-  const staff = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-
-  if (!staff) {
-    return { ok: false, message: 'Staff not found.' };
-  }
-
-  if (staff.status === 'active') {
-    return { ok: false, message: 'Already approved.' };
-  }
-
-  staff.status = 'active';
-  staff.approvedAt = new Date().toISOString();
-  saveUsers(users);
-  return { ok: true, staff };
-};
-
-export const rejectMaintenanceStaff = (email) => {
-  const users = getUsers();
-  const staffIndex = users.findIndex((u) => u.email.toLowerCase() === email.toLowerCase());
-
-  if (staffIndex === -1) {
-    return { ok: false, message: 'Staff not found.' };
-  }
-
-  users.splice(staffIndex, 1);
-  saveUsers(users);
-  return { ok: true };
-};
-
-export const getStaffAccounts = () => {
-  const users = getUsers();
-  return users.filter((u) => u.role === 'maintenance');
-};
-
-export const createStaffAccount = ({ fullName, email, password, phoneNumber, department, assignedCategories }) => {
-  const users = getUsers();
-  const exists = users.some((u) => u.email.toLowerCase() === email.toLowerCase());
-
-  if (exists) {
-    return { ok: false, message: 'An account with this email already exists.' };
-  }
-
-  const newStaff = {
-    staffId: `STF-${Date.now()}`,
-    fullName,
-    email,
-    password,
-    phoneNumber: phoneNumber || '',
-    department: department || '',
-    assignedCategories: assignedCategories || [],
-    role: 'maintenance',
-    status: 'active',
-    createdAt: new Date().toISOString(),
-    stats: {
-      completedIssues: 0,
-      activeIssues: 0,
-      overdueIssues: 0,
-      slaCompliancePercent: 100,
-      averageResolutionHours: 0,
-    },
-  };
-
-  users.push(newStaff);
-  saveUsers(users);
-  return { ok: true, staff: newStaff };
-};
-
-export const updateStaffAccount = (originalEmail, updates) => {
-  const users = getUsers();
-  const staff = users.find(
-    (u) => u.role === 'maintenance' && u.email.toLowerCase() === originalEmail.toLowerCase()
-  );
-
-  if (!staff) {
-    return { ok: false, message: 'Staff account not found.' };
-  }
-
-  if (updates.email && updates.email.toLowerCase() !== originalEmail.toLowerCase()) {
-    const emailExists = users.some((u) => u.email.toLowerCase() === updates.email.toLowerCase());
-    if (emailExists) {
-      return { ok: false, message: 'Another account with this email already exists.' };
+export const approveMaintenanceStaff = async (email) => {
+  try {
+    const response = await apiFetch(`/api/auth/maintenance/${encodeURIComponent(email)}/approve`, {
+      method: 'PATCH',
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.ok) {
+      return { ok: false, message: result?.message || 'Failed to approve staff.' };
     }
+    return { ok: true, staff: result.data };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
   }
-
-  Object.assign(staff, updates, { updatedAt: new Date().toISOString() });
-  saveUsers(users);
-  return { ok: true, staff };
 };
 
-export const deleteStaffAccount = (email) => {
-  const users = getUsers();
-  const index = users.findIndex(
-    (u) => u.role === 'maintenance' && u.email.toLowerCase() === email.toLowerCase()
-  );
-
-  if (index === -1) {
-    return { ok: false, message: 'Staff account not found.' };
+export const rejectMaintenanceStaff = async (email) => {
+  try {
+    const response = await apiFetch(`/api/auth/maintenance/${encodeURIComponent(email)}/reject`, {
+      method: 'DELETE',
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.ok) {
+      return { ok: false, message: result?.message || 'Failed to reject staff.' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
   }
-
-  users.splice(index, 1);
-  saveUsers(users);
-  return { ok: true };
 };
 
-export const getReporterAccounts = () => {
-  const users = getUsers();
-  return users.filter((u) => u.role === 'student');
+export const getStaffAccounts = async () => {
+  try {
+    const response = await apiFetch('/api/admin/staff');
+    const result = await response.json();
+    if (!response.ok || !result?.ok) return [];
+    // Normalize backend shape to the shape pages expect
+    return (result.data || []).map((s) => ({
+      staffId: s._id,
+      fullName: s.name || s.fullName || '',
+      email: s.email || '',
+      phoneNumber: s.phone || s.phoneNumber || '',
+      employeeId: s.employeeId || '',
+      department: s.department || '',
+      assignedCategories: s.assignedCategories || [],
+      role: 'maintenance',
+      status: s.isSuspended ? 'suspended' : s.isActive ? 'active' : 'inactive',
+      stats: s.stats || {},
+      createdAt: s.createdAt,
+    }));
+  } catch {
+    return [];
+  }
 };
 
-export const updateReporterStatus = (email, status) => {
-  const users = getUsers();
-  const reporter = users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.role === 'student');
+export const createStaffAccount = async ({ fullName, email, password, phoneNumber, employeeId, department, assignedCategories }) => {
+  const normalizedAssignedCategories = (assignedCategories || [])
+    .map((category) => {
+      if (typeof category === 'string') return category;
+      return category?._id || category?.id || category?.value || null;
+    })
+    .filter(Boolean);
 
-  if (!reporter) {
-    return { ok: false, message: 'Reporter account not found.' };
+  try {
+    const response = await apiFetch('/api/admin/staff', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: fullName,
+        email,
+        password,
+        phone: phoneNumber || '',
+        employeeId: employeeId || '',
+        department: department || '',
+        assignedCategories: normalizedAssignedCategories,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.ok) {
+      return { ok: false, message: result?.message || 'Failed to create staff account.' };
+    }
+    return { ok: true, staff: result.data };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
   }
-
-  reporter.status = status;
-  reporter.updatedAt = new Date().toISOString();
-  saveUsers(users);
-  return { ok: true, reporter };
 };
 
-export const resetReporterPassword = (email, newPassword) => {
-  const users = getUsers();
-  const reporter = users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.role === 'student');
+export const updateStaffAccount = async (staffId, updates) => {
+  const normalizedAssignedCategories = (updates.assignedCategories || [])
+    .map((category) => {
+      if (typeof category === 'string') return category;
+      return category?._id || category?.id || category?.value || null;
+    })
+    .filter(Boolean);
 
-  if (!reporter) {
-    return { ok: false, message: 'Reporter account not found.' };
+  try {
+    const response = await apiFetch(`/api/admin/staff/${encodeURIComponent(staffId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: updates.fullName,
+        email: updates.email,
+        phone: updates.phoneNumber,
+        employeeId: updates.employeeId,
+        department: updates.department,
+        assignedCategories: normalizedAssignedCategories,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.ok) {
+      return { ok: false, message: result?.message || 'Failed to update staff account.' };
+    }
+    // Handle suspend/reactivate separately if status changed
+    if (updates.status === 'suspended' || updates.status === 'inactive') {
+      await apiFetch(`/api/admin/staff/${encodeURIComponent(staffId)}/suspend`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason: updates.suspendedReason || '' }),
+      });
+    } else if (updates.status === 'active') {
+      await apiFetch(`/api/admin/staff/${encodeURIComponent(staffId)}/reactivate`, {
+        method: 'PATCH',
+      });
+    }
+    return { ok: true, staff: result.data };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
   }
-
-  reporter.password = newPassword;
-  reporter.updatedAt = new Date().toISOString();
-  saveUsers(users);
-  return { ok: true };
 };
 
-export const deleteReporterAccount = (email) => {
-  const users = getUsers();
-  const index = users.findIndex((u) => u.email.toLowerCase() === email.toLowerCase() && u.role === 'student');
-
-  if (index === -1) {
-    return { ok: false, message: 'Reporter account not found.' };
+export const deleteStaffAccount = async (staffId) => {
+  try {
+    const response = await apiFetch(`/api/admin/staff/${encodeURIComponent(staffId)}`, {
+      method: 'DELETE',
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.ok) {
+      return { ok: false, message: result?.message || 'Failed to delete staff account.' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
   }
+};
 
-  users.splice(index, 1);
-  saveUsers(users);
-  return { ok: true };
+export const getReporterAccounts = async () => {
+  try {
+    const response = await apiFetch('/api/admin/reporters');
+    const result = await response.json();
+    if (!response.ok || !result?.ok) return [];
+    return (result.data || []).map((r) => ({
+      _id: r._id,
+      fullName: r.fullName || r.name || '',
+      email: r.email || '',
+      registerNumber: r.registerNumber || '',
+      semester: r.semester || '',
+      phoneNumber: r.phoneNumber || r.phone || '',
+      department: r.department || '',
+      role: 'student',
+      status: r.isActive ? 'active' : 'inactive',
+      createdAt: r.createdAt,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+export const updateReporterStatus = async (reporterId, status) => {
+  try {
+    const response = await apiFetch(`/api/admin/reporters/${encodeURIComponent(reporterId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.ok) {
+      return { ok: false, message: result?.message || 'Failed to update reporter status.' };
+    }
+    return { ok: true, reporter: result.data };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
+  }
+};
+
+export const deleteReporterAccount = async (reporterId) => {
+  try {
+    const response = await apiFetch(`/api/admin/reporters/${encodeURIComponent(reporterId)}`, {
+      method: 'DELETE',
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.ok) {
+      return { ok: false, message: result?.message || 'Failed to delete reporter account.' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'Unable to connect to backend. Please try again.' };
+  }
 };

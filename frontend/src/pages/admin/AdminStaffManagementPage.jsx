@@ -6,6 +6,7 @@ import AlertMessage from '../../components/auth/AlertMessage';
 import AddStaffModal from '../../components/admin/AddStaffModal';
 import EditStaffModal from '../../components/admin/EditStaffModal';
 import { ISSUE_CATEGORIES } from '../../constants/issues';
+import { apiFetch } from '../../utils/apiConfig';
 import {
   getStaffAccounts,
   createStaffAccount,
@@ -29,31 +30,77 @@ export default function AdminStaffManagementPage() {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [usesPagination, setUsesPagination] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const itemsPerPage = 10;
-  const categoryOptions = ISSUE_CATEGORIES.map((item) => ({ id: item.value, name: item.label }));
 
   useEffect(() => {
-    fetchStaff();
+    loadInitialData();
   }, []);
 
   useEffect(() => {
     filterStaff();
   }, [staff, searchQuery, departmentFilter, statusFilter]);
 
-  const fetchStaff = async () => {
+  const getFallbackCategoryOptions = () =>
+    ISSUE_CATEGORIES.map((item) => ({
+      id: item.value,
+      name: item.label,
+      dbName: item.label,
+    }));
+
+  const fetchCategoryOptions = async () => {
+    try {
+      const response = await apiFetch('/api/categories');
+      const result = await response.json();
+      if (!response.ok || !result?.ok) {
+        const fallback = getFallbackCategoryOptions();
+        setCategoryOptions(fallback);
+        return fallback;
+      }
+
+      const options = (result.data || []).map((category) => ({
+        id: String(category._id || category.id),
+        name: category.name,
+        dbName: category.name,
+      }));
+
+      setCategoryOptions(options);
+      return options;
+    } catch {
+      const fallback = getFallbackCategoryOptions();
+      setCategoryOptions(fallback);
+      return fallback;
+    }
+  };
+
+  const loadInitialData = async () => {
+    const options = await fetchCategoryOptions();
+    await fetchStaff(options);
+  };
+
+  const fetchStaff = async (options = categoryOptions) => {
     setLoading(true);
     try {
-      const accounts = getStaffAccounts();
-      const allIssues = getIssues();
+      const accounts = await getStaffAccounts();
+      const allIssues = await getIssues();
       
       const normalized = accounts.map((entry) => {
         const categories = (entry.assignedCategories || []).map((category) => {
           if (typeof category === 'string') {
-            const matched = categoryOptions.find((item) => item.id === category);
+            const matched = options.find(
+              (item) =>
+                String(item.id).toLowerCase() === String(category).toLowerCase() ||
+                String(item.dbName).toLowerCase() === String(category).toLowerCase() ||
+                String(item.name).toLowerCase() === String(category).toLowerCase()
+            );
             return matched || { id: category, name: category };
           }
-          if (category?.id && category?.name) return category;
-          if (category?._id && category?.name) return { id: category._id, name: category.name };
+          if (category?._id && category?.name) {
+            return { id: String(category._id), name: category.name, dbName: category.name };
+          }
+          if (category?.id && category?.name) {
+            return { id: String(category.id), name: category.name, dbName: category.name };
+          }
           return null;
         }).filter(Boolean);
 
@@ -81,6 +128,7 @@ export default function AdminStaffManagementPage() {
           email: entry.email || '',
           password: entry.password || '',
           phone: entry.phoneNumber || '',
+          employeeId: entry.employeeId || '',
           department: entry.department || 'General',
           assignedCategories: categories,
           isActive: entry.status === 'active',
@@ -149,7 +197,7 @@ export default function AdminStaffManagementPage() {
         return;
       }
 
-      const result = deleteStaffAccount(target.email);
+      const result = await deleteStaffAccount(target._id || target.staffId);
       if (!result.ok) {
         setMessageType('error');
         setMessage(result.message);
@@ -170,16 +218,17 @@ export default function AdminStaffManagementPage() {
     setShowEditModal(true);
   };
 
-  const handleAddStaff = (newStaffData) => {
+  const handleAddStaff = async (newStaffData) => {
     const selectedCategories = (newStaffData.assignedCategories || []);
 
-    const result = createStaffAccount({
+    const result = await createStaffAccount({
       fullName: newStaffData.name,
       email: newStaffData.email,
       password: newStaffData.password,
       phoneNumber: newStaffData.phone,
+      employeeId: newStaffData.employeeId,
       department: newStaffData.department,
-      assignedCategories: selectedCategories,  // Already in correct format (array of strings)
+      assignedCategories: selectedCategories,
     });
 
     if (!result.ok) {
@@ -194,25 +243,26 @@ export default function AdminStaffManagementPage() {
     setMessage(`Staff member ${newStaffData.name} added successfully`);
   };
 
-  const handleUpdateStaff = (updatedStaffData) => {
+  const handleUpdateStaff = async (updatedStaffData) => {
     const original = selectedStaff;
     if (!original) return;
 
-    // Extract just the category IDs as strings
-    const selectedCategories = (updatedStaffData.assignedCategories || []);
+    // Extract just the category IDs - handle both object and string formats
+    const selectedCategories = (updatedStaffData.assignedCategories || []).map((cat) => {
+      return typeof cat === 'string' ? cat : (cat?.id || cat?._id || cat);
+    }).filter(Boolean);
 
     const status = updatedStaffData.isSuspended ? 'inactive' : 'active';
 
-    const result = updateStaffAccount(original.email, {
+    const result = await updateStaffAccount(original._id || original.staffId, {
       fullName: updatedStaffData.name,
       email: updatedStaffData.email,
       phoneNumber: updatedStaffData.phone,
+      employeeId: updatedStaffData.employeeId,
       department: updatedStaffData.department,
-      assignedCategories: selectedCategories,  // Keep as array of strings
+      assignedCategories: selectedCategories,
       status,
       suspendedReason: updatedStaffData.suspendedReason || null,
-      stats: updatedStaffData.stats || original.stats,
-      ...(updatedStaffData.password ? { password: updatedStaffData.password } : {}),
     });
 
     if (!result.ok) {

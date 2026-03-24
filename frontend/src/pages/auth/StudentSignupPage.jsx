@@ -60,11 +60,11 @@ export default function StudentSignupPage() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (!validate()) return;
 
-    const result = registerUser({
+    const result = await registerUser({
       fullName: formData.fullName,
       email: formData.email,
       registerNumber: formData.registerNumber,
@@ -89,7 +89,7 @@ export default function StudentSignupPage() {
   return (
     <AuthShell>
       <AuthCard>
-        <AuthHeader title="Create Student Account" subtitle="Register for Smart Campus portal access" />
+        <AuthHeader title="Create Reporter Account" subtitle="Register for Smart Campus portal access" />
 
         <AlertMessage message={message} />
 

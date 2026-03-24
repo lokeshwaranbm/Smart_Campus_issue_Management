@@ -70,7 +70,7 @@ const seedCategories = async () => {
     const created = await Category.insertMany(
       SAMPLE_CATEGORIES.map((cat) => ({
         ...cat,
-        createdBy: 'system',
+        createdBy: new mongoose.Types.ObjectId(),
         isActive: true,
       }))
     );

@@ -73,7 +73,7 @@ staffRouter.get('/admin/staff/:id', async (req, res) => {
  */
 staffRouter.post('/admin/staff', async (req, res) => {
   try {
-    const { name, email, phone, department, assignedCategories, slaOverride, password } =
+    const { name, email, phone, employeeId, department, assignedCategories, slaOverride, password } =
       req.body;
 
     if (!name || !email || !department) {
@@ -83,13 +83,14 @@ staffRouter.post('/admin/staff', async (req, res) => {
       });
     }
 
-    const adminId = req.user?.id || 'system'; // Assumes auth middleware sets req.user
+    const adminId = req.user?.id || null; // Assumes auth middleware sets req.user
 
     const result = await createStaff(
       {
         name,
         email,
         phone: phone || null,
+        employeeId: employeeId || null,
         department,
         assignedCategories: assignedCategories || [],
         slaOverride,
@@ -118,12 +119,13 @@ staffRouter.post('/admin/staff', async (req, res) => {
  */
 staffRouter.patch('/admin/staff/:id', async (req, res) => {
   try {
-    const { name, email, phone, department, assignedCategories, slaOverride } = req.body;
+    const { name, email, phone, employeeId, department, assignedCategories, slaOverride } = req.body;
 
     const staff = await updateStaff(req.params.id, {
       name,
       email,
       phone,
+      employeeId,
       department,
       assignedCategories,
       slaOverride,
@@ -317,4 +319,75 @@ staffRouter.get('/admin/departments', (req, res) => {
     ok: true,
     data: departments,
   });
+});
+
+// ============ REPORTER (STUDENT) MANAGEMENT ============
+
+/**
+ * GET /api/admin/reporters
+ * Get all student/reporter accounts
+ */
+staffRouter.get('/admin/reporters', async (req, res) => {
+  try {
+    const reporters = await User.find({ role: 'student' })
+      .select('-password -__v')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      ok: true,
+      data: reporters,
+      count: reporters.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to fetch reporters',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * PATCH /api/admin/reporters/:id/status
+ * Enable or disable a reporter's login access
+ */
+staffRouter.patch('/admin/reporters/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['active', 'inactive'].includes(status)) {
+      return res.status(400).json({ ok: false, message: "status must be 'active' or 'inactive'" });
+    }
+
+    const reporter = await User.findOneAndUpdate(
+      { _id: req.params.id, role: 'student' },
+      { isActive: status === 'active', updatedAt: new Date() },
+      { new: true, select: '-password -__v' }
+    );
+
+    if (!reporter) {
+      return res.status(404).json({ ok: false, message: 'Reporter account not found.' });
+    }
+
+    res.status(200).json({ ok: true, data: reporter });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/reporters/:id
+ * Delete a reporter account
+ */
+staffRouter.delete('/admin/reporters/:id', async (req, res) => {
+  try {
+    const reporter = await User.findOneAndDelete({ _id: req.params.id, role: 'student' });
+
+    if (!reporter) {
+      return res.status(404).json({ ok: false, message: 'Reporter account not found.' });
+    }
+
+    res.status(200).json({ ok: true, message: `Reporter account deleted.` });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error.message });
+  }
 });

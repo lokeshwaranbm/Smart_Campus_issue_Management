@@ -9,6 +9,7 @@ export default function AddStaffModal({ onClose, onAdd, categoryOptions = [] }) 
     name: '',
     email: '',
     phone: '',
+    employeeId: '',
     department: '',
     assignedCategories: [],
     password: '',
@@ -94,6 +95,14 @@ export default function AddStaffModal({ onClose, onAdd, categoryOptions = [] }) 
                 placeholder="9876543210"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              />
+
+              <FormField
+                label="Employee ID"
+                type="text"
+                placeholder="EMP001"
+                value={formData.employeeId}
+                onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
               />
 
               <div>

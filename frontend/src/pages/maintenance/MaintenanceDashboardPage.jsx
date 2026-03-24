@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
@@ -10,7 +10,11 @@ import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
 export default function MaintenanceDashboardPage() {
   const navigate = useNavigate();
   const session = getAuthSession();
-  const allIssues = useMemo(() => getIssues(), []);
+  const [allIssues, setAllIssues] = useState([]);
+
+  useEffect(() => {
+    getIssues().then(setAllIssues).catch(() => setAllIssues([]));
+  }, []);
 
   const assignedIssues = useMemo(() => {
     return allIssues.filter((i) => i.assignedDepartment === session?.department || (i.status !== 'submitted' && i.assignedDepartment));

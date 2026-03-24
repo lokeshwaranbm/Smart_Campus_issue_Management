@@ -102,10 +102,9 @@ function OverallReportChart({ issues }) {
   );
 }
 
-function AnalyticsGrid() {
-  const issues = useMemo(() => getIssues(), []);
-  const categoryStats = useMemo(() => getCategoryStats(), []);
-  const deptStats = useMemo(() => getDepartmentStats(), []);
+function AnalyticsGrid({ issues }) {
+  const categoryStats = useMemo(() => getCategoryStats(issues), [issues]);
+  const deptStats = useMemo(() => getDepartmentStats(issues), [issues]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -164,13 +163,16 @@ function AnalyticsGrid() {
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
-  const issues = useMemo(() => getIssues(), []);
-  const stats = useMemo(() => getIssueStats(), []);
-  const pendingStaff = useMemo(() => getPendingMaintenanceStaff(), []);
+  const [issues, setIssues] = useState([]);
+  const [stats, setStats] = useState({ total: 0, submitted: 0, assigned: 0, inProgress: 0, resolved: 0 });
+  const [pendingStaff, setPendingStaff] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
+    getIssues().then(setIssues).catch(() => setIssues([]));
+    getIssueStats().then(setStats).catch(() => {});
     setNotifications(getActiveNotifications());
+    getPendingMaintenanceStaff().then(setPendingStaff).catch(() => setPendingStaff([]));
   }, []);
 
   const handleDismissNotification = (notificationId) => {
@@ -257,7 +259,7 @@ export default function AdminDashboardPage() {
       )}
 
       <div className="space-y-6">
-        <AnalyticsGrid />
+        <AnalyticsGrid issues={issues} />
 
         <div className="rounded-card border border-slate-200 bg-white p-6 shadow-card">
           <h2 className="mb-4 text-lg font-semibold text-slate-900">Recent Issues</h2>

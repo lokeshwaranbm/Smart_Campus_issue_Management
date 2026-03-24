@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, UserRound, ShieldCheck, ShieldX, Trash2, Eye, X, FileText, Clock, MapPin } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
@@ -20,19 +20,19 @@ export default function AdminReporterManagementPage() {
   const [selectedReporter, setSelectedReporter] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  const reporters = useMemo(() => {
-    const reporterList = getReporterAccounts();
-    const allIssues = getIssues();
-    
-    // Add issue count to each reporter
-    return reporterList.map(reporter => {
-      const reporterIssues = allIssues.filter(issue => issue.studentEmail === reporter.email);
-      return {
-        ...reporter,
-        issueCount: reporterIssues.length,
-        issues: reporterIssues
-      };
-    });
+  const [reporters, setReporters] = useState([]);
+
+  useEffect(() => {
+    const loadReporters = async () => {
+      const reporterList = await getReporterAccounts();
+      const allIssues = await getIssues();
+      const enriched = reporterList.map((reporter) => {
+        const reporterIssues = allIssues.filter((issue) => issue.studentEmail === reporter.email);
+        return { ...reporter, issueCount: reporterIssues.length, issues: reporterIssues };
+      });
+      setReporters(enriched);
+    };
+    loadReporters();
   }, [refreshKey]);
 
   const filteredReporters = useMemo(() => {
@@ -58,7 +58,7 @@ export default function AdminReporterManagementPage() {
   const activeCount = reporters.filter((r) => (r.status || 'active') === 'active').length;
   const disabledCount = reporters.filter((r) => (r.status || 'active') !== 'active').length;
 
-  const handleToggleStatus = (reporter) => {
+  const handleToggleStatus = async (reporter) => {
     const currentStatus = reporter.status || 'active';
     const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
     const actionLabel = nextStatus === 'active' ? 'enable' : 'disable';
@@ -68,7 +68,7 @@ export default function AdminReporterManagementPage() {
     );
     if (!confirmed) return;
 
-    const result = updateReporterStatus(reporter.email, nextStatus);
+    const result = await updateReporterStatus(reporter._id, nextStatus);
     if (!result.ok) {
       setMessageType('error');
       setMessage(result.message);
@@ -84,11 +84,11 @@ export default function AdminReporterManagementPage() {
     setRefreshKey((prev) => prev + 1);
   };
 
-  const handleDeleteReporter = (reporter) => {
+  const handleDeleteReporter = async (reporter) => {
     const confirmed = window.confirm(`Delete reporter account for ${reporter.fullName}?`);
     if (!confirmed) return;
 
-    const result = deleteReporterAccount(reporter.email);
+    const result = await deleteReporterAccount(reporter._id);
     if (!result.ok) {
       setMessageType('error');
       setMessage(result.message);

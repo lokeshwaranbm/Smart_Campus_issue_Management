@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, ArrowLeft } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
@@ -7,35 +7,37 @@ import { getPendingMaintenanceStaff, approveMaintenanceStaff, rejectMaintenanceS
 
 export default function AdminApprovalPage() {
   const navigate = useNavigate();
-  const pendingStaff = useMemo(() => getPendingMaintenanceStaff(), []);
+  const [pendingStaff, setPendingStaff] = useState([]);
   const [message, setMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const handleApprove = (email, name) => {
-    const result = approveMaintenanceStaff(email);
+  const loadPendingStaff = async () => {
+    const pending = await getPendingMaintenanceStaff();
+    setPendingStaff(pending);
+  };
+
+  useEffect(() => {
+    loadPendingStaff();
+  }, []);
+
+  const handleApprove = async (email, name) => {
+    const result = await approveMaintenanceStaff(email);
     if (result.ok) {
       setSuccessMessage(`${name} account approved and activated.`);
-      setRefreshKey((prev) => prev + 1);
-      setTimeout(() => {
-        setSuccessMessage('');
-        window.location.reload();
-      }, 2000);
+      await loadPendingStaff();
+      setTimeout(() => setSuccessMessage(''), 2000);
     } else {
       setMessage(result.message);
     }
   };
 
-  const handleReject = (email, name) => {
+  const handleReject = async (email, name) => {
     if (window.confirm(`Reject registration for ${name}?`)) {
-      const result = rejectMaintenanceStaff(email);
+      const result = await rejectMaintenanceStaff(email);
       if (result.ok) {
         setSuccessMessage(`${name} registration rejected and removed.`);
-        setRefreshKey((prev) => prev + 1);
-        setTimeout(() => {
-          setSuccessMessage('');
-          window.location.reload();
-        }, 2000);
+        await loadPendingStaff();
+        setTimeout(() => setSuccessMessage(''), 2000);
       } else {
         setMessage(result.message);
       }

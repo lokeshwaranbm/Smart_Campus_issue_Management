@@ -45,7 +45,7 @@ export default function LoginPage() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (!validate()) return;
 
@@ -57,7 +57,7 @@ export default function LoginPage() {
       return;
     }
 
-    const result = loginUser(formData);
+    const result = await loginUser(formData);
     if (!result.ok) {
       // Record failed login attempt
       recordFailedLogin(formData.email);
@@ -81,7 +81,7 @@ export default function LoginPage() {
     clearLoginAttempts(formData.email);
 
     setAuthSession(result.user);
-    navigate(resolveRoleRedirect(result.user.role));
+    navigate(result.redirectTo || resolveRoleRedirect(result.user.role));
   };
 
   return (

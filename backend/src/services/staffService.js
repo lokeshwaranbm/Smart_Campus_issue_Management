@@ -1,6 +1,127 @@
 import { User } from '../models/User.js';
 import { IssueSLA } from '../models/IssueSLA.js';
+import { Category } from '../models/Category.js';
 import mongoose from 'mongoose';
+
+const CATEGORY_ALIAS_TO_NAME = {
+  electrical: 'Electrical',
+  plumbing: 'Plumbing',
+  network: 'Network',
+  wifi: 'Network',
+  cleanliness: 'Cleanliness',
+  hostel: 'Hostel',
+  maintenance: 'Maintenance',
+  other: 'Other',
+  laboratory: 'Other',
+  classroom: 'Other',
+};
+
+const parseCategoryInput = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined) return [];
+
+  if (typeof value === 'string') {
+    const raw = value.trim();
+    if (!raw) return [];
+
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      const singleQuotedArray = raw.match(/'([^']+)'/g);
+      if (singleQuotedArray && singleQuotedArray.length) {
+        return singleQuotedArray.map((token) => token.replace(/'/g, ''));
+      }
+      return [raw];
+    }
+  }
+
+  return [value];
+};
+
+const normalizeAssignedCategories = async (assignedCategories) => {
+  // Handle empty array or null/undefined
+  if (!assignedCategories || (Array.isArray(assignedCategories) && assignedCategories.length === 0)) {
+    return [];
+  }
+
+  const rawValues = parseCategoryInput(assignedCategories)
+    .flat()
+    .map((item) => {
+      if (item && typeof item === 'object') {
+        return item._id || item.id || item.value || item.name || null;
+      }
+      return item;
+    })
+    .filter(Boolean);
+
+  if (rawValues.length === 0) {
+    return [];
+  }
+
+  const objectIdStrings = new Set();
+  const lookupTokens = [];
+
+  for (const item of rawValues) {
+    const value = String(item).trim();
+    if (!value) continue;
+
+    if (mongoose.Types.ObjectId.isValid(value)) {
+      objectIdStrings.add(value);
+      continue;
+    }
+
+    lookupTokens.push(value.toLowerCase());
+  }
+
+  // If we have valid ObjectIds and no lookup tokens, return them as is
+  if (lookupTokens.length === 0 && objectIdStrings.size > 0) {
+    return Array.from(objectIdStrings).map((id) => new mongoose.Types.ObjectId(id));
+  }
+
+  // Lookup categories by name if needed
+  if (lookupTokens.length) {
+    const activeCategories = await Category.find({ isActive: true }).select('_id name').lean();
+    
+    // Create multiple lookup strategies
+    const nameToId = new Map();
+    const aliasToId = new Map();
+
+    activeCategories.forEach((category) => {
+      const nameLower = String(category.name).toLowerCase();
+      nameToId.set(nameLower, String(category._id));
+      
+      // Also map by alias
+      Object.entries(CATEGORY_ALIAS_TO_NAME).forEach(([alias, categoryName]) => {
+        if (categoryName.toLowerCase() === nameLower) {
+          aliasToId.set(alias, String(category._id));
+        }
+      });
+    });
+
+    for (const token of lookupTokens) {
+      // Try direct name match first
+      let categoryId = nameToId.get(token);
+      
+      // Try alias match
+      if (!categoryId) {
+        categoryId = aliasToId.get(token);
+      }
+      
+      // Try normalized name match
+      if (!categoryId) {
+        const normalizedName = (CATEGORY_ALIAS_TO_NAME[token] || token).toLowerCase();
+        categoryId = nameToId.get(normalizedName);
+      }
+      
+      if (categoryId) {
+        objectIdStrings.add(categoryId);
+      }
+    }
+  }
+
+  return Array.from(objectIdStrings).map((id) => new mongoose.Types.ObjectId(id));
+};
 
 /**
  * Calculate and update staff performance metrics
@@ -118,8 +239,10 @@ export const getStaffById = async (staffId) => {
  */
 export const createStaff = async (staffData, createdByAdminId) => {
   try {
-    const { name, email, phone, department, assignedCategories, slaOverride, password } =
+    const { name, email, phone, employeeId, department, assignedCategories, slaOverride, password } =
       staffData;
+
+    const normalizedAssignedCategories = await normalizeAssignedCategories(assignedCategories);
 
     // Check if email already exists
     const existing = await User.findOne({ email: email.toLowerCase() });
@@ -134,13 +257,14 @@ export const createStaff = async (staffData, createdByAdminId) => {
       name,
       email,
       phone,
+      employeeId,
       department,
-      assignedCategories: assignedCategories || [],
+      assignedCategories: normalizedAssignedCategories,
       slaOverride,
       password: staffPassword,
       role: 'staff',
       isActive: true,
-      createdBy: createdByAdminId,
+      ...(createdByAdminId ? { createdBy: createdByAdminId } : {}),
     });
 
     // Populate and return
@@ -164,7 +288,23 @@ export const createStaff = async (staffData, createdByAdminId) => {
  */
 export const updateStaff = async (staffId, updateData) => {
   try {
-    const { name, email, phone, department, assignedCategories, slaOverride } = updateData;
+    const { name, email, phone, employeeId, department, assignedCategories, slaOverride } = updateData;
+    const hasAssignedCategories = assignedCategories !== undefined;
+    
+    console.log('updateStaff called with:', {
+      staffId,
+      assignedCategories,
+      hasAssignedCategories,
+    });
+
+    let normalizedAssignedCategories;
+    if (hasAssignedCategories) {
+      normalizedAssignedCategories = await normalizeAssignedCategories(assignedCategories);
+      console.log('After normalization:', {
+        input: assignedCategories,
+        output: normalizedAssignedCategories.map(c => c.toString()),
+      });
+    }
 
     // Check if new email is unique (if changing email)
     if (email) {
@@ -174,18 +314,28 @@ export const updateStaff = async (staffId, updateData) => {
       }
     }
 
+    const updatePayload = {
+      ...(name && { name }),
+      ...(email && { email }),
+      ...(phone && { phone }),
+      ...(employeeId !== undefined && { employeeId }),
+      ...(department && { department }),
+      ...(hasAssignedCategories && { assignedCategories: normalizedAssignedCategories }),
+      ...(slaOverride !== undefined && { slaOverride }),
+    };
+
+    console.log('Update payload:', updatePayload);
+
     const staff = await User.findByIdAndUpdate(
       staffId,
-      {
-        ...(name && { name }),
-        ...(email && { email }),
-        ...(phone && { phone }),
-        ...(department && { department }),
-        ...(assignedCategories && { assignedCategories }),
-        ...(slaOverride !== undefined && { slaOverride }),
-      },
+      updatePayload,
       { new: true }
     ).populate('assignedCategories', 'name slaHours');
+
+    console.log('Staff after update:', {
+      id: staff._id,
+      assignedCategories: staff.assignedCategories,
+    });
 
     return staff;
   } catch (error) {

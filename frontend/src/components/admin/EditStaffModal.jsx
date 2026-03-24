@@ -1,24 +1,82 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, Save, AlertTriangle } from 'lucide-react';
 import FormField from '../auth/FormField';
-import PasswordField from '../auth/PasswordField';
 import AlertMessage from '../auth/AlertMessage';
 
+const getCategoryLookupKey = (value) => String(value || '').trim().toLowerCase();
+
 export default function EditStaffModal({ staff, onClose, onUpdate, categoryOptions = [] }) {
+  // Create a map to match category names to their option IDs
+  const categoryNameMap = useMemo(() => {
+    const map = new Map();
+    categoryOptions.forEach((opt) => {
+      // Map by ID (the alias)
+      map.set(getCategoryLookupKey(opt.id), opt.id);
+      
+      // Map by display name (case-insensitive)
+      map.set(getCategoryLookupKey(opt.name), opt.id);
+      
+      // Map by database name if available
+      if (opt.dbName) {
+        map.set(getCategoryLookupKey(opt.dbName), opt.id);
+      }
+    });
+    return map;
+  }, [categoryOptions]);
+
+  // Initialize assigned categories by matching names
+  const initialAssignedCategories = useMemo(() => {
+    return (staff.assignedCategories || [])
+      .map((c) => {
+        // Get category name and ID
+        const categoryName = c.name || '';
+        const categoryId = c._id || c.id;
+        
+        // Try matching by name first (case-insensitive)
+        const nameMatch = categoryNameMap.get(getCategoryLookupKey(categoryName));
+        if (nameMatch) {
+          return nameMatch;
+        }
+        
+        // Try matching by ID lookup key
+        const directMatch = categoryNameMap.get(getCategoryLookupKey(categoryId));
+        if (directMatch) {
+          return directMatch;
+        }
+        
+        return null;
+      })
+      .filter(Boolean);
+  }, [staff.assignedCategories, categoryNameMap]);
+
   const [formData, setFormData] = useState({
     name: staff.name || '',
     email: staff.email || '',
     phone: staff.phone || '',
+    employeeId: staff.employeeId || '',
     department: staff.department || '',
-    assignedCategories: (staff.assignedCategories || []).map((c) => c.id),
-    password: staff.password || '',
+    assignedCategories: [],
   });
+
+  useEffect(() => {
+    setFormData({
+      name: staff.name || '',
+      email: staff.email || '',
+      phone: staff.phone || '',
+      employeeId: staff.employeeId || '',
+      department: staff.department || '',
+      assignedCategories: initialAssignedCategories,
+    });
+  }, [staff, initialAssignedCategories]);
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [showSuspendForm, setShowSuspendForm] = useState(false);
   const [suspendReason, setSuspendReason] = useState('');
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const departments = ['Maintenance', 'Electrical', 'Plumbing', 'Network', 'Facilities'];
 
@@ -39,8 +97,9 @@ export default function EditStaffModal({ staff, onClose, onUpdate, categoryOptio
       return;
     }
 
-    if (formData.password && formData.password.length < 8) {
-      setMessage('Password must be at least 8 characters.');
+    // If employee ID is provided, categories must be assigned
+    if (formData.employeeId && formData.assignedCategories.length === 0) {
+      setMessage('Please assign at least one category for this employee');
       return;
     }
 
@@ -50,9 +109,7 @@ export default function EditStaffModal({ staff, onClose, onUpdate, categoryOptio
       const updatedStaff = {
         ...staff,
         ...formData,
-        assignedCategories: formData.assignedCategories
-          .map((id) => categoryOptions.find((c) => c.id === id))
-          .filter(Boolean),
+        assignedCategories: formData.assignedCategories,
       };
 
       onUpdate(updatedStaff);
@@ -86,6 +143,40 @@ export default function EditStaffModal({ staff, onClose, onUpdate, categoryOptio
       suspendedReason: null,
     };
     onUpdate(reactivatedStaff);
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      setMessage('Please enter new password and confirmation');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setMessage('Password must be at least 8 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setMessage('Passwords do not match');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const updatedStaff = {
+        ...staff,
+        password: newPassword,
+      };
+      onUpdate(updatedStaff);
+      setShowResetPasswordModal(false);
+      setNewPassword('');
+      setConfirmPassword('');
+      setMessage('Password reset successfully');
+    } catch (error) {
+      setMessage('Error resetting password: ' + error.message);
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   return (
@@ -131,6 +222,13 @@ export default function EditStaffModal({ staff, onClose, onUpdate, categoryOptio
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 />
 
+                <FormField
+                  label="Employee ID"
+                  type="text"
+                  value={formData.employeeId}
+                  onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                />
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
                     Department
@@ -149,22 +247,34 @@ export default function EditStaffModal({ staff, onClose, onUpdate, categoryOptio
                   </select>
                 </div>
 
-                <PasswordField
-                  id="password"
-                  label="Password"
-                  placeholder="Staff login password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  showPassword={showPassword}
-                  onToggle={() => setShowPassword((prev) => !prev)}
-                />
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPasswordModal(true)}
+                    className="flex-1 rounded-lg bg-slate-600 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+                  >
+                    Reset Password
+                  </button>
+                </div>
 
               </div>
             </div>
 
             {/* Assign Categories */}
             <div>
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Assigned Categories</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-900">Assigned Categories</h3>
+                {formData.employeeId && formData.assignedCategories.length === 0 && (
+                  <span className="text-xs text-red-600 font-semibold">Required</span>
+                )}
+              </div>
+              {formData.employeeId && formData.assignedCategories.length === 0 && (
+                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <p className="text-sm text-red-700">
+                    Please assign at least one category for this employee before saving.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                 {categoryOptions.map((category) => (
                   <label
@@ -287,6 +397,78 @@ export default function EditStaffModal({ staff, onClose, onUpdate, categoryOptio
           </form>
         </div>
       </div>
+
+      {/* Reset Password Modal */}
+      {showResetPasswordModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h3 className="text-lg font-bold text-slate-900">Reset Password</h3>
+              <button
+                onClick={() => {
+                  setShowResetPasswordModal(false);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4">
+                Set a new password for <span className="font-semibold">{staff.name}</span>
+              </p>
+
+              <div className="space-y-4">
+                <FormField
+                  label="New Password"
+                  type="password"
+                  placeholder="Enter new password (min 8 characters)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+
+                <FormField
+                  label="Confirm Password"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResetPasswordModal(false);
+                    setNewPassword('');
+                    setConfirmPassword('');
+                  }}
+                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={resetLoading}
+                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {resetLoading ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

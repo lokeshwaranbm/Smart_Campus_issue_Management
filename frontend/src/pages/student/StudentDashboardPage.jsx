@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ClipboardList, Plus, AlertCircle, Clock, CheckCircle2, Eye, Newspaper, Info, MessageCircle, Heart, MapPin } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
@@ -6,7 +6,7 @@ import StatsCard from '../../components/dashboard/StatsCard';
 import IssueCard from '../../components/student/IssueCard';
 import FloatingActionButton from '../../components/student/FloatingActionButton';
 import { getAuthSession } from '../../utils/auth';
-import { getIssuesByStudent, getPublicIssueFeed, addSupport, removeSupport, hasUserSupported } from '../../utils/issues';
+import { getIssuesByStudent, getPublicIssueFeed, addSupport, removeSupport } from '../../utils/issues';
 import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
 
 export default function StudentDashboardPage() {
@@ -16,32 +16,33 @@ export default function StudentDashboardPage() {
 
   const session = getAuthSession();
   const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'myReports'
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const studentIssues = useMemo(() => getIssuesByStudent(session?.email), [session?.email, refreshKey]);
-  const publicFeed = useMemo(() => getPublicIssueFeed(), [refreshKey]);
+  const [studentIssues, setStudentIssues] = useState([]);
+  const [publicFeed, setPublicFeed] = useState([]);
 
-  const stats = useMemo(() => {
-    const userStats = {
-      total: studentIssues.length,
-      submitted: studentIssues.filter((i) => i.status === 'submitted').length,
-      assigned: studentIssues.filter((i) => i.status === 'assigned').length,
-      inProgress: studentIssues.filter((i) => i.status === 'in_progress').length,
-      resolved: studentIssues.filter((i) => i.status === 'resolved').length,
-    };
-    return userStats;
-  }, [studentIssues]);
-
-  const handleSupport = (issueId) => {
-    if (hasUserSupported(issueId, session?.email)) {
-      removeSupport(issueId, session?.email);
-    } else {
-      addSupport(issueId, session?.email);
+  const loadData = () => {
+    if (session?.email) {
+      getIssuesByStudent(session.email).then(setStudentIssues).catch(() => setStudentIssues([]));
     }
-    setRefreshKey((prev) => prev + 1);
+    getPublicIssueFeed().then(setPublicFeed).catch(() => setPublicFeed([]));
   };
 
-  const issueSupportedByUser = (issueId) => hasUserSupported(issueId, session?.email);
+  useEffect(() => { loadData(); }, [session?.email]);
+
+  const stats = useMemo(() => ({
+    total: studentIssues.length,
+    submitted: studentIssues.filter((i) => i.status === 'submitted').length,
+    assigned: studentIssues.filter((i) => i.status === 'assigned').length,
+    inProgress: studentIssues.filter((i) => i.status === 'in_progress').length,
+    resolved: studentIssues.filter((i) => i.status === 'resolved').length,
+  }), [studentIssues]);
+
+  const handleSupport = async (issueId) => {
+    await addSupport(issueId, session?.email);
+    loadData();
+  };
+
+  const issueSupportedByUser = (issue) => issue.supportedBy?.includes(session?.email) ?? false;
 
   const getPriorityColor = (priority) => {
     const p = ISSUE_PRIORITIES.find((x) => x.value === priority);
@@ -115,7 +116,7 @@ export default function StudentDashboardPage() {
                   key={issue.id}
                   issue={issue}
                   onSupport={handleSupport}
-                  isSupported={issueSupportedByUser(issue.id)}
+                  isSupported={issueSupportedByUser(issue)}
                 />
               ))}
             </div>

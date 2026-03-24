@@ -3,7 +3,10 @@
  * Uses environment variable VITE_API_BASE_URL to determine the backend URL
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+// In production (Netlify) this is '' so relative /api/* paths are proxied to Render.
+// In local dev set VITE_API_BASE_URL=http://localhost:5000 in frontend/.env, OR rely on
+// Vite's built-in proxy (already configured in vite.config.js) with the empty default.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
  * Constructs a full API URL

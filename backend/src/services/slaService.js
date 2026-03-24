@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Category } from '../models/Category.js';
 import { IssueSLA } from '../models/IssueSLA.js';
 import { Notification } from '../models/Notification.js';

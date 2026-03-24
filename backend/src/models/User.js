@@ -39,7 +39,18 @@ const UserSchema = new mongoose.Schema(
     department: {
       type: String,
       default: null,
-      enum: ['Maintenance', 'Electrical', 'Plumbing', 'Network', 'Facilities', null],
+    },
+    registerNumber: {
+      type: String,
+      default: null,
+    },
+    semester: {
+      type: String,
+      default: null,
+    },
+    employeeId: {
+      type: String,
+      default: null,
     },
     assignedCategories: [
       {

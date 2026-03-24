@@ -37,9 +37,11 @@ export default function AdminStaffWorkloadPage() {
     };
   }, []);
 
-  const staffWorkload = useMemo(() => {
-    const staff = getStaffAccounts();
-    const issues = getIssues();
+  const [staffWorkload, setStaffWorkload] = useState([]);
+
+  const buildWorkload = async () => {
+    const staff = await getStaffAccounts();
+    const issues = await getIssues();
 
     return staff.map((staffMember) => {
       const assignedIssues = issues.filter((issue) => issue.assignedTo === staffMember.email);
@@ -92,6 +94,10 @@ export default function AdminStaffWorkloadPage() {
         assignedIssues: assignedIssues.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
       };
     });
+  };
+
+  useEffect(() => {
+    buildWorkload().then(setStaffWorkload);
   }, [refreshKey]);
 
   const filteredStaff = useMemo(() => {

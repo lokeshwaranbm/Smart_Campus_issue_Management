@@ -6,8 +6,8 @@ const CategorySchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      enum: ['Electrical', 'Plumbing', 'Network', 'Cleanliness', 'Hostel', 'Transport', 'Maintenance', 'Other'],
       index: true,
+      trim: true,
     },
     description: {
       type: String,

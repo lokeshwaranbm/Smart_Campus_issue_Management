@@ -43,11 +43,6 @@ const NotificationSchema = new mongoose.Schema(
       staffName: String,
       priorityLevel: String,
     },
-    createdAt: {
-      type: Date,
-      default: Date.now,
-      index: true,
-    },
   },
   { timestamps: true }
 );

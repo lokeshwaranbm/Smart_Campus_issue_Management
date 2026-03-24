@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Settings,
@@ -22,11 +22,10 @@ import AlertMessage from '../../components/auth/AlertMessage';
 import {
   getSettings,
   updateSettings,
-  getSettingSection,
+  getDefaultSettings,
   addCategory,
   updateCategory,
   deleteCategory,
-  resetSettingsToDefaults,
 } from '../../utils/settings';
 
 export default function AdminSettingsPage() {
@@ -39,19 +38,26 @@ export default function AdminSettingsPage() {
   const [editingCategory, setEditingCategory] = useState(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [formData, setFormData] = useState({});
-  const [settings, setSettingsState] = useState(getSettings());
+  const [settings, setSettingsState] = useState(getDefaultSettings());
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
-  // Fetch current settings for the active tab
-  const currentSettings = useMemo(() => {
-    return getSettingSection(activeTab) || settings[activeTab];
-  }, [activeTab, settings]);
+  useEffect(() => {
+    const loadSettings = async () => {
+      setLoadingSettings(true);
+      const data = await getSettings();
+      setSettingsState(data);
+      setLoadingSettings(false);
+    };
 
-  const handleSaveSettings = (section, data) => {
-    const result = updateSettings(section, data);
+    loadSettings();
+  }, []);
+
+  const handleSaveSettings = async (section, data) => {
+    const result = await updateSettings(section, data);
     if (result.ok) {
       setMessageType('success');
       setMessage(result.message);
-      setSettingsState(getSettings());
+      setSettingsState((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }));
     } else {
       setMessageType('error');
       setMessage(result.message);
@@ -59,9 +65,20 @@ export default function AdminSettingsPage() {
   };
 
   // ============ CATEGORIES TAB ============
+  const CATEGORY_NAME_OPTIONS = [
+    'Electrical',
+    'Plumbing',
+    'Network',
+    'Cleanliness',
+    'Hostel',
+    'Transport',
+    'Maintenance',
+    'Other',
+  ];
+
   const handleAddCategory = () => {
     setEditingCategory(null);
-    setFormData({ name: '', slaHours: 48, priority: 'medium', isCritical: false });
+    setFormData({ name: CATEGORY_NAME_OPTIONS[0], slaHours: 48, priority: 'medium', isCritical: false });
     setShowCategoryModal(true);
   };
 
@@ -71,7 +88,7 @@ export default function AdminSettingsPage() {
     setShowCategoryModal(true);
   };
 
-  const handleSaveCategory = () => {
+  const handleSaveCategory = async () => {
     if (!formData.name || !formData.name.trim()) {
       setMessageType('error');
       setMessage('Category name is required');
@@ -80,15 +97,16 @@ export default function AdminSettingsPage() {
 
     let result;
     if (editingCategory) {
-      result = updateCategory(editingCategory.id, formData);
+      result = await updateCategory(editingCategory.id, formData);
     } else {
-      result = addCategory(formData);
+      result = await addCategory(formData);
     }
 
     if (result.ok) {
       setMessageType('success');
       setMessage(result.message);
-      setSettingsState(getSettings());
+      const refreshed = await getSettings();
+      setSettingsState(refreshed);
       setShowCategoryModal(false);
     } else {
       setMessageType('error');
@@ -96,17 +114,21 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const handleDeleteCategory = (categoryId) => {
-    const result = deleteCategory(categoryId);
+  const handleDeleteCategory = async (categoryId) => {
+    const result = await deleteCategory(categoryId);
     if (result.ok) {
       setMessageType('success');
       setMessage(result.message);
-      setSettingsState(getSettings());
+      const refreshed = await getSettings();
+      setSettingsState(refreshed);
       setShowDeleteModal(false);
+    } else {
+      setMessageType('error');
+      setMessage(result.message);
     }
   };
 
-  const categories = getSettingSection('categories') || [];
+  const categories = settings.categories || [];
 
   // ============ TAB CONTENT FUNCTIONS ============
 
@@ -173,7 +195,7 @@ export default function AdminSettingsPage() {
   );
 
   const renderSLATab = () => {
-    const slaSettings = getSettingSection('sla') || settings.sla;
+    const slaSettings = settings.sla || getDefaultSettings().sla;
     return (
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-slate-900">SLA Configuration</h3>
@@ -252,7 +274,7 @@ export default function AdminSettingsPage() {
   };
 
   const renderStaffTab = () => {
-    const staffSettings = getSettingSection('staff') || settings.staff;
+    const staffSettings = settings.staff || getDefaultSettings().staff;
     return (
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-slate-900">Staff Configuration</h3>
@@ -321,7 +343,7 @@ export default function AdminSettingsPage() {
   };
 
   const renderNotificationsTab = () => {
-    const notifSettings = getSettingSection('notifications') || settings.notifications;
+    const notifSettings = settings.notifications || getDefaultSettings().notifications;
     return (
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-slate-900">Notification Settings</h3>
@@ -363,7 +385,7 @@ export default function AdminSettingsPage() {
   };
 
   const renderSystemTab = () => {
-    const sysSettings = getSettingSection('system') || settings.system;
+    const sysSettings = settings.system || getDefaultSettings().system;
     return (
       <div className="space-y-6">
         <h3 className="text-2xl font-semibold text-slate-900">My Settings</h3>
@@ -417,7 +439,7 @@ export default function AdminSettingsPage() {
   };
 
   const renderCampusTab = () => {
-    const campusSettings = getSettingSection('campusInfo') || settings.campusInfo;
+    const campusSettings = settings.campusInfo || getDefaultSettings().campusInfo;
     return (
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-slate-900">Campus Information</h3>
@@ -476,7 +498,7 @@ export default function AdminSettingsPage() {
   };
 
   const renderSecurityTab = () => {
-    const secSettings = getSettingSection('security') || settings.security;
+    const secSettings = settings.security || getDefaultSettings().security;
     return (
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-slate-900">Security Settings</h3>
@@ -553,6 +575,14 @@ export default function AdminSettingsPage() {
     security: renderSecurityTab,
     system: renderSystemTab,
   };
+
+  if (loadingSettings) {
+    return (
+      <DashboardShell title="Settings" subtitle="Configure system, categories, staff, and notifications" roleLabel="Admin">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">Loading settings...</div>
+      </DashboardShell>
+    );
+  }
 
   return (
     <DashboardShell title="Settings" subtitle="Configure system, categories, staff, and notifications" roleLabel="Admin">
@@ -633,13 +663,17 @@ export default function AdminSettingsPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-900 mb-1">Category Name</label>
-                  <input
-                    type="text"
-                    value={formData.name || ''}
+                  <select
+                    value={formData.name || CATEGORY_NAME_OPTIONS[0]}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Electrical"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  />
+                  >
+                    {CATEGORY_NAME_OPTIONS.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Filter, Trash2 } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
@@ -7,23 +7,26 @@ import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
 
 export default function AdminIssuesListPage() {
   const navigate = useNavigate();
-  const [refreshKey, setRefreshKey] = useState(0);
-  const allIssues = useMemo(() => getIssues(), [refreshKey]);
+  const [allIssues, setAllIssues] = useState([]);
   const [filterStatus, setFilterStatus] = useState('');
   const [sortBy, setSortBy] = useState('newest');
 
-  const handleDeleteIssue = (issueId, issueTitle) => {
+  const loadIssues = () => {
+    getIssues().then(setAllIssues).catch(() => setAllIssues([]));
+  };
+
+  useEffect(() => { loadIssues(); }, []);
+
+  const handleDeleteIssue = async (issueId, issueTitle) => {
     const confirmed = window.confirm(
       `⚠️ Delete Issue?\n\n"${issueTitle}"\n\nThis will permanently delete this issue from:\n• Campus Feed\n• Staff Dashboard\n• All Reports\n\nThis action CANNOT be undone!\n\nClick OK to delete.`
     );
 
     if (!confirmed) return;
 
-    const result = deleteIssue(issueId);
-    if (result.ok) {
-      setRefreshKey((prev) => prev + 1);
-      alert('✅ Issue deleted successfully!');
-    }
+    await deleteIssue(issueId);
+    loadIssues();
+    alert('✅ Issue deleted successfully!');
   };
 
   const filteredIssues = useMemo(() => {

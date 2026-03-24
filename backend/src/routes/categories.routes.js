@@ -3,6 +3,7 @@ import { Category } from '../models/Category.js';
 import { IssueSLA } from '../models/IssueSLA.js';
 import { Notification } from '../models/Notification.js';
 import { reassignIssue } from '../services/slaService.js';
+import mongoose from 'mongoose';
 
 export const categoryRouter = Router();
 
@@ -62,7 +63,7 @@ categoryRouter.post('/categories', async (req, res) => {
       description,
       assignedStaff: assignedStaff || [],
       slaHours,
-      createdBy: req.user?.id || 'system', // Assumes auth middleware sets req.user
+      createdBy: req.user?.id || new mongoose.Types.ObjectId(), // Fallback for local/dev without auth
     });
 
     const populatedCategory = await category.populate('assignedStaff', 'id name email role');

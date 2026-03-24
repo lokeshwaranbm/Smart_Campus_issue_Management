@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: smart-campus-backend
+    root_dir: backend
+    runtime: node
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      # Set this in Render dashboard → your MongoDB Atlas connection string
+      # e.g. mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/smart-campus?retryWrites=true&w=majority
+      - key: MONGODB_URI
+        sync: false
+      # Set this to your Netlify site URL, e.g. https://your-site.netlify.app
+      - key: CORS_ORIGIN
+        sync: false
+      - key: ENABLE_IN_MEMORY_DB_FALLBACK
+        value: false
+
+# NOTE: Render does not host MongoDB natively.
+# Use MongoDB Atlas (free tier): https://www.mongodb.com/atlas/database
+# Create a free M0 cluster, add a database user, allow 0.0.0.0/0 in Network Access,
+# then paste the Atlas connection string into MONGODB_URI above.

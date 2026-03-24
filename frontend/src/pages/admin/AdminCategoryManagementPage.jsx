@@ -4,6 +4,7 @@ import { AlertCircle, Plus, Trash2, Edit2, Users, Clock, ArrowLeft } from 'lucid
 import AlertMessage from '../../components/auth/AlertMessage';
 import FormField from '../../components/auth/FormField';
 import SelectField from '../../components/auth/SelectField';
+import { apiFetch } from '../../utils/apiConfig';
 
 export default function AdminCategoryManagementPage() {
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ export default function AdminCategoryManagementPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories');
+      const response = await apiFetch('/api/categories');
       const result = await response.json();
       if (result.ok) {
         setCategories(result.data);
@@ -51,12 +52,17 @@ export default function AdminCategoryManagementPage() {
 
   const fetchStaffList = async () => {
     try {
-      // TODO: Replace with actual API call
-      setStaffList([
-        { id: 1, name: 'John Maintenance', role: 'maintenance' },
-        { id: 2, name: 'Jane Electrician', role: 'maintenance' },
-        { id: 3, name: 'Bob Plumber', role: 'maintenance' },
-      ]);
+      const response = await apiFetch('/api/admin/staff');
+      const result = await response.json();
+
+      if (result.ok) {
+        const normalizedStaff = (result.data || []).map((staff) => ({
+          id: staff._id || staff.id,
+          name: staff.name,
+          role: staff.role,
+        }));
+        setStaffList(normalizedStaff);
+      }
     } catch (error) {
       setMessage('Failed to load staff: ' + error.message);
     }
@@ -76,9 +82,8 @@ export default function AdminCategoryManagementPage() {
       const endpoint = isEditing ? `/api/categories/${editingId}` : '/api/categories';
       const method = isEditing ? 'PATCH' : 'POST';
 
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
@@ -105,7 +110,7 @@ export default function AdminCategoryManagementPage() {
       name: category.name,
       description: category.description,
       slaHours: category.slaHours,
-      assignedStaff: category.assignedStaff.map((s) => s.id),
+      assignedStaff: category.assignedStaff.map((s) => s._id || s.id),
     });
     setEditingId(category._id);
     setIsEditing(true);
@@ -115,7 +120,7 @@ export default function AdminCategoryManagementPage() {
     if (!window.confirm('Are you sure you want to delete this category?')) return;
 
     try {
-      const response = await fetch(`/api/categories/${categoryId}`, {
+      const response = await apiFetch(`/api/categories/${categoryId}`, {
         method: 'DELETE',
       });
 

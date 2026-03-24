@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, CheckCircle2, MapPin, ExternalLink } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
@@ -19,10 +19,32 @@ export default function MaintenanceIssueDetailPage() {
   const navigate = useNavigate();
   const session = getAuthSession();
 
-  const issue = useMemo(() => getIssueById(issueId), [issueId]);
-  const [newStatus, setNewStatus] = useState(issue?.status || '');
+  const [issue, setIssue] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [newStatus, setNewStatus] = useState('');
   const [remark, setRemark] = useState('');
   const [message, setMessage] = useState('');
+
+  const loadIssue = () => {
+    setLoading(true);
+    getIssueById(issueId)
+      .then((data) => {
+        setIssue(data);
+        setNewStatus(data?.status || '');
+      })
+      .catch(() => setIssue(null))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadIssue(); }, [issueId]);
+
+  if (loading) {
+    return (
+      <DashboardShell title="Loading…" subtitle="" roleLabel="Maintenance">
+        <p className="text-slate-600">Loading issue…</p>
+      </DashboardShell>
+    );
+  }
 
   if (!issue) {
     return (
@@ -41,34 +63,26 @@ export default function MaintenanceIssueDetailPage() {
     );
   }
 
-  const handleStatusUpdate = () => {
+  const handleStatusUpdate = async () => {
     if (!newStatus) {
       setMessage('Please select a status.');
       return;
     }
 
-    const result = updateIssueStatus(issueId, newStatus, session?.email);
-    if (result.ok) {
-      setMessage('Status updated successfully.');
-      setTimeout(() => window.location.reload(), 1500);
-    } else {
-      setMessage(result.message);
-    }
+    await updateIssueStatus(issueId, newStatus, session?.email);
+    setMessage('Status updated successfully.');
+    setTimeout(() => loadIssue(), 1500);
   };
 
-  const handleAddRemark = () => {
+  const handleAddRemark = async () => {
     if (!remark.trim()) {
       setMessage('Remark cannot be empty.');
       return;
     }
 
-    const result = addIssueRemark(issueId, remark, session?.email);
-    if (result.ok) {
-      setRemark('');
-      window.location.reload();
-    } else {
-      setMessage(result.message);
-    }
+    await addIssueRemark(issueId, remark, session?.email);
+    setRemark('');
+    loadIssue();
   };
 
   const priorityColor = ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.color || '';
