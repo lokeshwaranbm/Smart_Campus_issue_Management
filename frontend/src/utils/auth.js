@@ -61,7 +61,7 @@ export const loginUser = async ({ email, password }) => {
 
 export const resolveRoleRedirect = (role) => {
   if (role === 'student') return '/dashboard/student';
-  if (role === 'maintenance') return '/dashboard/maintenance';
+  if (role === 'maintenance' || role === 'contractor') return '/dashboard/maintenance';
   return '/dashboard/admin';
 };
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, X, RotateCcw, AlertTriangle } from 'lucide-react';
 import { requestCameraAccess, captureFrame, stopMediaStream } from '../../utils/camera';
 
-export default function CameraModal({ isOpen, onCapture, onClose }) {
+export default function CameraModal({ isOpen, onCapture, onClose, captureMetaLines = [] }) {
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
@@ -64,7 +64,7 @@ export default function CameraModal({ isOpen, onCapture, onClose }) {
     setIsLoading(true);
     setError('');
     try {
-      const frame = await captureFrame(videoRef.current);
+      const frame = await captureFrame(videoRef.current, { overlayLines: captureMetaLines });
       setCapturedImage(frame);
     } catch (err) {
       setError('Failed to capture image: ' + err.message);
@@ -195,7 +195,7 @@ export default function CameraModal({ isOpen, onCapture, onClose }) {
 
         {/* Info */}
         <div className="border-t border-slate-700 px-4 py-3 text-xs text-slate-400">
-          Tip: Ensure good lighting and allow camera access when prompted.
+          Tip: Ensure good lighting and allow camera access when prompted. Captured photo will include geotag info.
         </div>
       </div>
     </div>

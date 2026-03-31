@@ -11,6 +11,7 @@ import PasswordStrength from '../../components/auth/PasswordStrength';
 import { registerUser } from '../../utils/auth';
 import { validateEmail, getPasswordStrength } from '../../utils/validation';
 import { departments } from '../../constants/formOptions';
+import useCampusInfo from '../../hooks/useCampusInfo';
 
 export default function MaintenanceSignupPage() {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ export default function MaintenanceSignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState('');
+  const { universityName, emailDomain } = useCampusInfo();
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -96,7 +98,7 @@ export default function MaintenanceSignupPage() {
       <AuthCard>
         <AuthHeader
           title="Maintenance Staff Registration"
-          subtitle="Create a maintenance account"
+          subtitle={`Create a maintenance account for ${universityName}`}
         />
 
         <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -121,7 +123,7 @@ export default function MaintenanceSignupPage() {
             type="email"
             value={formData.email}
             onChange={handleChange}
-            placeholder="staff@university.edu"
+            placeholder={`staff@${emailDomain}`}
             error={errors.email}
           />
 

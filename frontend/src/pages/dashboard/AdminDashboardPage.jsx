@@ -2,6 +2,7 @@ import { CircleCheckBig, Clock3, AlertTriangle, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import StatsCard from '../../components/dashboard/StatsCard';
+import useCampusInfo from '../../hooks/useCampusInfo';
 
 function CampusIllustration() {
   return (
@@ -22,6 +23,8 @@ function CampusIllustration() {
 }
 
 export default function AdminDashboardPage() {
+  const { universityName } = useCampusInfo();
+
   return (
     <DashboardShell
       title="Admin Control Panel"
@@ -32,7 +35,7 @@ export default function AdminDashboardPage() {
         <div className="rounded-card border border-slate-200 bg-white p-5 shadow-card">
           <div className="mb-4 flex items-center gap-2 text-slate-800">
             <Building2 size={18} className="text-primary" />
-            <h2 className="text-base font-semibold">University Administration Dashboard</h2>
+            <h2 className="text-base font-semibold">{universityName} Administration Dashboard</h2>
           </div>
           <CampusIllustration />
         </div>

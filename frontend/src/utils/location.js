@@ -5,17 +5,42 @@ export const getCurrentLocation = () => {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
+    let bestPosition = null;
+    let settled = false;
+
+    const finalizeWithBest = () => {
+      if (settled) return;
+      settled = true;
+
+      if (!bestPosition) {
+        reject(new Error('Unable to retrieve location'));
+        return;
+      }
+
+      const { latitude, longitude, accuracy } = bestPosition.coords;
+      resolve({
+        latitude: parseFloat(latitude.toFixed(6)),
+        longitude: parseFloat(longitude.toFixed(6)),
+        accuracy,
+        timestamp: bestPosition.timestamp,
+      });
+    };
+
+    const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        resolve({
-          latitude: parseFloat(latitude.toFixed(6)),
-          longitude: parseFloat(longitude.toFixed(6)),
-          accuracy: position.coords.accuracy,
-          timestamp: position.timestamp,
-        });
+        if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+          bestPosition = position;
+        }
+
+        // ~50m or better is usually good enough for campus-level issue reporting.
+        if (position.coords.accuracy <= 50) {
+          navigator.geolocation.clearWatch(watchId);
+          finalizeWithBest();
+        }
       },
       (error) => {
+        navigator.geolocation.clearWatch(watchId);
+
         let message = 'Unable to retrieve location';
         if (error.code === error.PERMISSION_DENIED) {
           message = 'Location permission denied. Please enable location access.';
@@ -24,14 +49,26 @@ export const getCurrentLocation = () => {
         } else if (error.code === error.TIMEOUT) {
           message = 'Location request timed out.';
         }
+
+        if (bestPosition) {
+          finalizeWithBest();
+          return;
+        }
+
         reject(new Error(message));
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 15000,
         maximumAge: 0,
       }
     );
+
+    // Stop waiting after a short window and return the best reading collected.
+    setTimeout(() => {
+      navigator.geolocation.clearWatch(watchId);
+      finalizeWithBest();
+    }, 12000);
   });
 };
 

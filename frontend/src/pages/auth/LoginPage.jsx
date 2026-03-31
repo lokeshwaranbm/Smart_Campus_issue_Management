@@ -8,6 +8,7 @@ import PasswordField from '../../components/auth/PasswordField';
 import AlertMessage from '../../components/auth/AlertMessage';
 import { loginUser, resolveRoleRedirect, setAuthSession } from '../../utils/auth';
 import { validateEmail } from '../../utils/validation';
+import useCampusInfo from '../../hooks/useCampusInfo';
 import { 
   checkLoginAttempt, 
   recordFailedLogin, 
@@ -24,6 +25,7 @@ export default function LoginPage() {
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('error');
+  const { universityName, emailDomain } = useCampusInfo();
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -88,7 +90,7 @@ export default function LoginPage() {
     <AuthShell>
       <AuthCard>
         <AuthHeader
-          title="Smart Campus Issue Management System"
+          title={`${universityName} Issue Management System`}
           subtitle="Login to your account"
         />
 
@@ -102,7 +104,7 @@ export default function LoginPage() {
             type="email"
             value={formData.email}
             onChange={handleChange}
-            placeholder="name@university.edu"
+            placeholder={`name@${emailDomain}`}
             error={errors.email}
           />
 

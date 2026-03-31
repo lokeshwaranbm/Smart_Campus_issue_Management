@@ -1,4 +1,4 @@
-export const requestCameraAccess = async () => {
+ export const requestCameraAccess = async () => {
   try {
     // Check browser support
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -41,7 +41,7 @@ export const requestCameraAccess = async () => {
   }
 };
 
-export const captureFrame = (videoElement) => {
+export const captureFrame = (videoElement, options = {}) => {
   return new Promise((resolve, reject) => {
     try {
       if (!videoElement || !videoElement.videoWidth || !videoElement.videoHeight) {
@@ -60,6 +60,29 @@ export const captureFrame = (videoElement) => {
       }
 
       context.drawImage(videoElement, 0, 0);
+
+      const overlayLines = Array.isArray(options.overlayLines)
+        ? options.overlayLines.map((line) => String(line || '').trim()).filter(Boolean)
+        : [];
+
+      if (overlayLines.length > 0) {
+        const padding = Math.max(10, Math.round(canvas.width * 0.015));
+        const fontSize = Math.max(12, Math.round(canvas.width * 0.022));
+        const lineHeight = Math.round(fontSize * 1.35);
+        const blockHeight = padding * 2 + overlayLines.length * lineHeight;
+
+        context.fillStyle = 'rgba(15, 23, 42, 0.72)';
+        context.fillRect(0, canvas.height - blockHeight, canvas.width, blockHeight);
+
+        context.fillStyle = '#f8fafc';
+        context.font = `${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+        context.textBaseline = 'top';
+
+        overlayLines.forEach((line, index) => {
+          const y = canvas.height - blockHeight + padding + index * lineHeight;
+          context.fillText(line, padding, y);
+        });
+      }
 
       canvas.toBlob((blob) => {
         if (blob) {

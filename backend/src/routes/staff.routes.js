@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { Department } from '../models/Department.js';
 import {
   getAllStaff,
   getStaffById,
@@ -15,6 +16,28 @@ import {
 import { User } from '../models/User.js';
 
 export const staffRouter = Router();
+
+const DEFAULT_DEPARTMENTS = [
+  'Agricultural Engineering',
+  'Artificial Intelligence and Data Science',
+  'Biomedical Engineering',
+  'Chemical Engineering',
+  'Chemistry',
+  'Civil Engineering',
+  'Computer Science and Engineering',
+  'Cyber Security',
+  'Electrical and Electronics Engineering',
+  'Electronics and Communication Engineering',
+  'English',
+  'Information Technology',
+  'Internet of Things',
+  'Master of Business Administration',
+  'Master of Computer Applications',
+  'Maths',
+  'Mechanical Engineering',
+  'News Letter',
+  'Physics',
+];
 
 // ============ STAFF MANAGEMENT ============
 
@@ -73,7 +96,7 @@ staffRouter.get('/admin/staff/:id', async (req, res) => {
  */
 staffRouter.post('/admin/staff', async (req, res) => {
   try {
-    const { name, email, phone, employeeId, department, assignedCategories, slaOverride, password } =
+    const { name, email, phone, employeeId, department, assignedCategories, slaOverride, password, role } =
       req.body;
 
     if (!name || !email || !department) {
@@ -95,13 +118,14 @@ staffRouter.post('/admin/staff', async (req, res) => {
         assignedCategories: assignedCategories || [],
         slaOverride,
         password,
+        role,
       },
       adminId
     );
 
     res.status(201).json({
       ok: true,
-      message: `Staff member ${name} created successfully`,
+      message: `${result.staff.role === 'contractor' ? 'Contractor' : 'Staff member'} ${name} created successfully`,
       data: result.staff,
       credentials: result.credentials,
     });
@@ -312,13 +336,21 @@ staffRouter.post('/admin/staff/:id/recalculate-performance', async (req, res) =>
  * GET /api/admin/departments
  * Get available departments
  */
-staffRouter.get('/admin/departments', (req, res) => {
-  const departments = ['Maintenance', 'Electrical', 'Plumbing', 'Network', 'Facilities'];
+staffRouter.get('/admin/departments', async (req, res) => {
+  try {
+    const departments = await Department.find({ isActive: true }).sort({ name: 1 }).select('name').lean();
+    const names = departments.map((d) => d.name).filter(Boolean);
 
-  res.status(200).json({
-    ok: true,
-    data: departments,
-  });
+    res.status(200).json({
+      ok: true,
+      data: names.length ? names : DEFAULT_DEPARTMENTS,
+    });
+  } catch (error) {
+    res.status(200).json({
+      ok: true,
+      data: DEFAULT_DEPARTMENTS,
+    });
+  }
 });
 
 // ============ REPORTER (STUDENT) MANAGEMENT ============

@@ -19,6 +19,11 @@ const CategorySchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    autoAssignPointer: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     slaHours: {
       type: Number,
       required: true,

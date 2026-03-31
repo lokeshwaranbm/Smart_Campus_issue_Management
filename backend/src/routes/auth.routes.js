@@ -3,7 +3,10 @@ import { User } from '../models/User.js';
 
 export const authRouter = Router();
 
-const getFrontendRole = (dbRole) => (dbRole === 'staff' ? 'maintenance' : dbRole);
+const getFrontendRole = (dbRole) => {
+  if (dbRole === 'staff' || dbRole === 'contractor') return 'maintenance';
+  return dbRole;
+};
 
 const getAccountStatus = (user) => {
   if (user.role === 'staff' && !user.isActive) return 'pending_approval';

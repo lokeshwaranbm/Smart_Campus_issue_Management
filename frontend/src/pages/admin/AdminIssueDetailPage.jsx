@@ -2,12 +2,18 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, MapPin, ExternalLink } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
-import FormField from '../../components/auth/FormField';
 import SelectField from '../../components/auth/SelectField';
 import AlertMessage from '../../components/auth/AlertMessage';
-import { getIssueById, assignIssue, updateIssueStatus, addIssueRemark } from '../../utils/issues';
+import {
+  getIssueById,
+  updateIssueStatus,
+  addIssueRemark,
+  getContractorsByCategory,
+  bindIssueContractor,
+  handleIssueInternally,
+} from '../../utils/issues';
 import { getAuthSession } from '../../utils/auth';
-import { ISSUE_STATUS, DEPARTMENTS, CATEGORY_TO_DEPARTMENT, ISSUE_PRIORITIES } from '../../constants/issues';
+import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
 import {
   parseLocationCoordinates,
   getLocationMapUrl,
@@ -23,7 +29,9 @@ export default function AdminIssueDetailPage() {
   const [issue, setIssue] = useState(null);
   const [loading, setLoading] = useState(true);
   const [newStatus, setNewStatus] = useState('');
-  const [newDepartment, setNewDepartment] = useState('');
+  const [contractors, setContractors] = useState([]);
+  const [selectedContractor, setSelectedContractor] = useState('');
+  const [assigning, setAssigning] = useState(false);
   const [remark, setRemark] = useState('');
   const [message, setMessage] = useState('');
 
@@ -33,13 +41,30 @@ export default function AdminIssueDetailPage() {
       .then((data) => {
         setIssue(data);
         setNewStatus(data?.status || '');
-        setNewDepartment(data?.assignedDepartment || '');
       })
       .catch(() => setIssue(null))
       .finally(() => setLoading(false));
   };
 
+  const loadContractors = async (category) => {
+    try {
+      const result = await getContractorsByCategory(category);
+      const options = (result?.data || []).map((item) => ({
+        value: item.email,
+        label: `${item.name} (${item.activeLoad ?? 0} active)` ,
+      }));
+      setContractors(options);
+    } catch {
+      setContractors([]);
+    }
+  };
+
   useEffect(() => { loadIssue(); }, [issueId]);
+
+  useEffect(() => {
+    if (!issue?.category) return;
+    loadContractors(issue.category);
+  }, [issue?.category]);
 
   if (loading) {
     return (
@@ -66,15 +91,32 @@ export default function AdminIssueDetailPage() {
     );
   }
 
-  const handleAssign = async () => {
-    if (!newDepartment) {
-      setMessage('Please select a department.');
-      return;
+  const handleInternalAssignment = async () => {
+    try {
+      setAssigning(true);
+      await handleIssueInternally(issueId, session?.email);
+      setMessage('Issue moved to internal handling (In Progress).');
+      await loadIssue();
+    } catch (error) {
+      setMessage(error.message || 'Failed to switch to internal handling.');
+    } finally {
+      setAssigning(false);
     }
+  };
 
-    await assignIssue(issueId, newDepartment, '');
-    setMessage('Issue assigned successfully.');
-    setTimeout(() => navigate('/admin/issues'), 1500);
+  const handleBindContractor = async () => {
+    try {
+      setAssigning(true);
+      await bindIssueContractor(issueId, selectedContractor || undefined, session?.email);
+      setMessage('Contractor bound successfully.');
+      setSelectedContractor('');
+      await loadIssue();
+      await loadContractors(issue?.category);
+    } catch (error) {
+      setMessage(error.message || 'Failed to bind contractor.');
+    } finally {
+      setAssigning(false);
+    }
   };
 
   const handleStatusUpdate = async () => {
@@ -137,6 +179,15 @@ export default function AdminIssueDetailPage() {
                 <p className="text-xs font-medium uppercase text-slate-500">Location</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">{issue.location}</p>
               </div>
+
+              {(issue.blockNumber || issue.floorNumber) && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium uppercase text-slate-500">Campus Spot</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    Block: {issue.blockNumber || 'N/A'} | Floor: {issue.floorNumber || 'N/A'}
+                  </p>
+                </div>
+              )}
 
               {coordinates && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -244,18 +295,28 @@ export default function AdminIssueDetailPage() {
             <h2 className="mb-4 font-semibold text-slate-900">Assignment</h2>
 
             <div className="space-y-3">
+              <button onClick={handleInternalAssignment} disabled={assigning} className="primary-button disabled:opacity-60">
+                Handle Internally
+              </button>
+
               <SelectField
-                id="newDepartment"
-                label="Assign to Department"
-                value={newDepartment}
-                onChange={(e) => setNewDepartment(e.target.value)}
-                options={DEPARTMENTS}
-                placeholder="Select department"
+                id="selectedContractor"
+                label="Bind Contractor"
+                value={selectedContractor}
+                onChange={(e) => setSelectedContractor(e.target.value)}
+                options={contractors}
+                placeholder={contractors.length ? 'Select contractor (optional)' : 'No eligible contractors'}
               />
 
-              <button onClick={handleAssign} className="primary-button">
-                Assign Issue
+              <button onClick={handleBindContractor} disabled={assigning || contractors.length === 0} className="primary-button disabled:opacity-60">
+                Bind Contractor
               </button>
+
+              {issue.contractorEmail ? (
+                <p className="text-xs text-slate-600">
+                  Current contractor: <span className="font-semibold">{issue.contractorName || issue.contractorEmail}</span>
+                </p>
+              ) : null}
             </div>
           </div>
 

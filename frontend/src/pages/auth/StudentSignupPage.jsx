@@ -11,6 +11,7 @@ import PasswordStrength from '../../components/auth/PasswordStrength';
 import { registerUser } from '../../utils/auth';
 import { validateEmail, getPasswordStrength } from '../../utils/validation';
 import { departments, semesterOptions } from '../../constants/formOptions';
+import useCampusInfo from '../../hooks/useCampusInfo';
 
 export default function StudentSignupPage() {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ export default function StudentSignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState('');
+  const { universityName, emailDomain } = useCampusInfo();
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -89,7 +91,7 @@ export default function StudentSignupPage() {
   return (
     <AuthShell>
       <AuthCard>
-        <AuthHeader title="Create Reporter Account" subtitle="Register for Smart Campus portal access" />
+        <AuthHeader title="Create Reporter Account" subtitle={`Register for ${universityName} portal access`} />
 
         <AlertMessage message={message} />
 
@@ -109,7 +111,7 @@ export default function StudentSignupPage() {
             type="email"
             value={formData.email}
             onChange={handleChange}
-            placeholder="name@university.edu"
+            placeholder={`name@${emailDomain}`}
             error={errors.email}
           />
 

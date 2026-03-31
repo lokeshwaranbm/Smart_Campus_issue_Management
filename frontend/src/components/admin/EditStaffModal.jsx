@@ -78,7 +78,27 @@ export default function EditStaffModal({ staff, onClose, onUpdate, categoryOptio
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
-  const departments = ['Maintenance', 'Electrical', 'Plumbing', 'Network', 'Facilities'];
+  const departments = [
+    'Agricultural Engineering',
+    'Artificial Intelligence and Data Science',
+    'Biomedical Engineering',
+    'Chemical Engineering',
+    'Chemistry',
+    'Civil Engineering',
+    'Computer Science and Engineering',
+    'Cyber Security',
+    'Electrical and Electronics Engineering',
+    'Electronics and Communication Engineering',
+    'English',
+    'Information Technology',
+    'Internet of Things',
+    'Master of Business Administration',
+    'Master of Computer Applications',
+    'Maths',
+    'Mechanical Engineering',
+    'News Letter',
+    'Physics',
+  ];
 
   const handleCategoryToggle = (categoryId) => {
     setFormData((prev) => ({

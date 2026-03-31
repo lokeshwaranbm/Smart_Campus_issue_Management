@@ -38,6 +38,7 @@ export default function AdminSettingsPage() {
   const [editingCategory, setEditingCategory] = useState(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [formData, setFormData] = useState({});
+  const [savedSettings, setSavedSettings] = useState(getDefaultSettings());
   const [settings, setSettingsState] = useState(getDefaultSettings());
   const [loadingSettings, setLoadingSettings] = useState(true);
 
@@ -45,6 +46,7 @@ export default function AdminSettingsPage() {
     const loadSettings = async () => {
       setLoadingSettings(true);
       const data = await getSettings();
+      setSavedSettings(data);
       setSettingsState(data);
       setLoadingSettings(false);
     };
@@ -57,11 +59,24 @@ export default function AdminSettingsPage() {
     if (result.ok) {
       setMessageType('success');
       setMessage(result.message);
+      setSavedSettings((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }));
       setSettingsState((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }));
     } else {
       setMessageType('error');
       setMessage(result.message);
     }
+  };
+
+  const handleFieldChange = (section, data) => {
+    setSettingsState((prev) => ({ ...prev, [section]: data }));
+  };
+
+  const handleResetSettings = (section) => {
+    const defaults = getDefaultSettings();
+    const nextSection = savedSettings[section] || defaults[section] || {};
+    setSettingsState((prev) => ({ ...prev, [section]: nextSection }));
+    setMessageType('info');
+    setMessage('Changes reset.');
   };
 
   // ============ CATEGORIES TAB ============
@@ -207,7 +222,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={slaSettings.defaultSlaHours}
               onChange={(e) =>
-                handleSaveSettings('sla', { ...slaSettings, defaultSlaHours: parseInt(e.target.value) })
+                handleFieldChange('sla', { ...slaSettings, defaultSlaHours: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -220,7 +235,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={slaSettings.escalationTimeHours}
               onChange={(e) =>
-                handleSaveSettings('sla', { ...slaSettings, escalationTimeHours: parseInt(e.target.value) })
+                handleFieldChange('sla', { ...slaSettings, escalationTimeHours: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -234,7 +249,7 @@ export default function AdminSettingsPage() {
             </div>
             <button
               onClick={() =>
-                handleSaveSettings('sla', { ...slaSettings, enableAutoEscalation: !slaSettings.enableAutoEscalation })
+                handleFieldChange('sla', { ...slaSettings, enableAutoEscalation: !slaSettings.enableAutoEscalation })
               }
               className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
                 slaSettings.enableAutoEscalation ? 'bg-green-600' : 'bg-slate-300'
@@ -255,7 +270,7 @@ export default function AdminSettingsPage() {
             </div>
             <button
               onClick={() =>
-                handleSaveSettings('sla', { ...slaSettings, notifyOnEscalation: !slaSettings.notifyOnEscalation })
+                handleFieldChange('sla', { ...slaSettings, notifyOnEscalation: !slaSettings.notifyOnEscalation })
               }
               className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
                 slaSettings.notifyOnEscalation ? 'bg-green-600' : 'bg-slate-300'
@@ -286,7 +301,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={staffSettings.maxIssuesPerStaff}
               onChange={(e) =>
-                handleSaveSettings('staff', { ...staffSettings, maxIssuesPerStaff: parseInt(e.target.value) })
+                handleFieldChange('staff', { ...staffSettings, maxIssuesPerStaff: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -299,7 +314,7 @@ export default function AdminSettingsPage() {
               type="time"
               value={staffSettings.workingHoursStart}
               onChange={(e) =>
-                handleSaveSettings('staff', { ...staffSettings, workingHoursStart: e.target.value })
+                handleFieldChange('staff', { ...staffSettings, workingHoursStart: e.target.value })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -311,7 +326,7 @@ export default function AdminSettingsPage() {
               type="time"
               value={staffSettings.workingHoursEnd}
               onChange={(e) =>
-                handleSaveSettings('staff', { ...staffSettings, workingHoursEnd: e.target.value })
+                handleFieldChange('staff', { ...staffSettings, workingHoursEnd: e.target.value })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -324,7 +339,7 @@ export default function AdminSettingsPage() {
             </div>
             <button
               onClick={() =>
-                handleSaveSettings('staff', { ...staffSettings, autoAssignmentEnabled: !staffSettings.autoAssignmentEnabled })
+                handleFieldChange('staff', { ...staffSettings, autoAssignmentEnabled: !staffSettings.autoAssignmentEnabled })
               }
               className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
                 staffSettings.autoAssignmentEnabled ? 'bg-green-600' : 'bg-slate-300'
@@ -362,7 +377,7 @@ export default function AdminSettingsPage() {
               </div>
               <button
                 onClick={() =>
-                  handleSaveSettings('notifications', {
+                  handleFieldChange('notifications', {
                     ...notifSettings,
                     [item.key]: !notifSettings[item.key],
                   })
@@ -397,7 +412,7 @@ export default function AdminSettingsPage() {
             <select
               value={sysSettings.paginationLimit}
               onChange={(e) =>
-                handleSaveSettings('system', { ...sysSettings, paginationLimit: parseInt(e.target.value) })
+                handleFieldChange('system', { ...sysSettings, paginationLimit: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm"
             >
@@ -415,7 +430,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={sysSettings.dataRetentionDays}
               onChange={(e) =>
-                handleSaveSettings('system', { ...sysSettings, dataRetentionDays: parseInt(e.target.value) })
+                handleFieldChange('system', { ...sysSettings, dataRetentionDays: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm"
             />
@@ -428,7 +443,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={sysSettings.autoArchiveDays}
               onChange={(e) =>
-                handleSaveSettings('system', { ...sysSettings, autoArchiveDays: parseInt(e.target.value) })
+                handleFieldChange('system', { ...sysSettings, autoArchiveDays: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm"
             />
@@ -451,7 +466,7 @@ export default function AdminSettingsPage() {
               type="text"
               value={campusSettings.universityName}
               onChange={(e) =>
-                handleSaveSettings('campusInfo', { ...campusSettings, universityName: e.target.value })
+                handleFieldChange('campusInfo', { ...campusSettings, universityName: e.target.value })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -463,7 +478,7 @@ export default function AdminSettingsPage() {
               type="email"
               value={campusSettings.contactEmail}
               onChange={(e) =>
-                handleSaveSettings('campusInfo', { ...campusSettings, contactEmail: e.target.value })
+                handleFieldChange('campusInfo', { ...campusSettings, contactEmail: e.target.value })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -475,7 +490,7 @@ export default function AdminSettingsPage() {
               type="tel"
               value={campusSettings.contactPhone}
               onChange={(e) =>
-                handleSaveSettings('campusInfo', { ...campusSettings, contactPhone: e.target.value })
+                handleFieldChange('campusInfo', { ...campusSettings, contactPhone: e.target.value })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -486,7 +501,7 @@ export default function AdminSettingsPage() {
             <textarea
               value={campusSettings.address}
               onChange={(e) =>
-                handleSaveSettings('campusInfo', { ...campusSettings, address: e.target.value })
+                handleFieldChange('campusInfo', { ...campusSettings, address: e.target.value })
               }
               rows={3}
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
@@ -510,7 +525,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={secSettings.passwordMinLength}
               onChange={(e) =>
-                handleSaveSettings('security', { ...secSettings, passwordMinLength: parseInt(e.target.value) })
+                handleFieldChange('security', { ...secSettings, passwordMinLength: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -522,7 +537,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={secSettings.sessionTimeoutMinutes}
               onChange={(e) =>
-                handleSaveSettings('security', { ...secSettings, sessionTimeoutMinutes: parseInt(e.target.value) })
+                handleFieldChange('security', { ...secSettings, sessionTimeoutMinutes: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -534,7 +549,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={secSettings.loginAttemptLimit}
               onChange={(e) =>
-                handleSaveSettings('security', { ...secSettings, loginAttemptLimit: parseInt(e.target.value) })
+                handleFieldChange('security', { ...secSettings, loginAttemptLimit: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -546,7 +561,7 @@ export default function AdminSettingsPage() {
               type="number"
               value={secSettings.accountLockDurationMinutes}
               onChange={(e) =>
-                handleSaveSettings('security', { ...secSettings, accountLockDurationMinutes: parseInt(e.target.value) })
+                handleFieldChange('security', { ...secSettings, accountLockDurationMinutes: parseInt(e.target.value) })
               }
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
             />
@@ -575,6 +590,10 @@ export default function AdminSettingsPage() {
     security: renderSecurityTab,
     system: renderSystemTab,
   };
+
+  const isCurrentSectionDirty =
+    activeTab !== 'categories' &&
+    JSON.stringify(settings[activeTab] || {}) !== JSON.stringify(savedSettings[activeTab] || {});
 
   if (loadingSettings) {
     return (
@@ -642,6 +661,25 @@ export default function AdminSettingsPage() {
           {/* Main Content */}
           <div className="flex-1">
             <div className="rounded-lg border border-slate-200 bg-white p-6">
+              {activeTab !== 'categories' && (
+                <div className="mb-5 flex items-center justify-end gap-2 border-b border-slate-200 pb-4">
+                  <button
+                    onClick={() => handleResetSettings(activeTab)}
+                    disabled={!isCurrentSectionDirty}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => handleSaveSettings(activeTab, settings[activeTab] || {})}
+                    disabled={!isCurrentSectionDirty}
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Save size={16} />
+                    Save
+                  </button>
+                </div>
+              )}
               {tabRenderers[activeTab]?.()}
             </div>
           </div>

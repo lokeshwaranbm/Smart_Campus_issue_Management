@@ -19,6 +19,7 @@ export const ISSUE_PRIORITIES = [
 export const ISSUE_STATUS = [
   { value: 'submitted', label: 'Submitted', color: 'bg-slate-100 text-slate-700' },
   { value: 'assigned', label: 'Assigned', color: 'bg-blue-100 text-blue-700' },
+  { value: 'contractor_assigned', label: 'Contractor Assigned', color: 'bg-indigo-100 text-indigo-700' },
   { value: 'in_progress', label: 'In Progress', color: 'bg-amber-100 text-amber-700' },
   { value: 'resolved', label: 'Resolved', color: 'bg-emerald-100 text-emerald-700' },
 ];

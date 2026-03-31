@@ -9,6 +9,7 @@ import CameraModal from '../../components/student/CameraModal';
 import { getAuthSession } from '../../utils/auth';
 import { createIssue } from '../../utils/issues';
 import { getCurrentLocation, formatLocationCoordinates } from '../../utils/location';
+import { getSettings } from '../../utils/settings';
 import { ISSUE_CATEGORIES, ISSUE_PRIORITIES, generateIssueId } from '../../constants/issues';
 
 export default function ReportIssuePage() {
@@ -20,6 +21,8 @@ export default function ReportIssuePage() {
     description: '',
     category: '',
     location: '',
+    blockNumber: '',
+    floorNumber: '',
     priority: 'medium',
     latitude: null,
     longitude: null,
@@ -30,29 +33,59 @@ export default function ReportIssuePage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [locationAccuracy, setLocationAccuracy] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
+  const [categoryOptions, setCategoryOptions] = useState(ISSUE_CATEGORIES);
+
+  const detectLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const loc = await getCurrentLocation();
+      setFormData((prev) => ({
+        ...prev,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        location: formatLocationCoordinates(loc.latitude, loc.longitude),
+      }));
+      setLocationAccuracy(loc.accuracy);
+      setErrors((prev) => ({ ...prev, location: '' }));
+      setMessage('');
+    } catch (err) {
+      setMessage(err.message);
+      setLocationAccuracy(null);
+    } finally {
+      setLocationLoading(false);
+    }
+  };
 
   // Auto-detect location on page load
   useEffect(() => {
-    const detectLocation = async () => {
-      setLocationLoading(true);
-      try {
-        const loc = await getCurrentLocation();
-        setFormData((prev) => ({
-          ...prev,
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-          location: `${formatLocationCoordinates(loc.latitude, loc.longitude)}`,
+    detectLocation();
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCategoryOptions = async () => {
+      const settings = await getSettings();
+      if (!isMounted) return;
+
+      const dynamicCategories = (settings?.categories || [])
+        .filter((category) => category?.isActive !== false)
+        .map((category) => ({
+          value: category.name,
+          label: category.name,
         }));
-      } catch (err) {
-        setMessage(err.message);
-      } finally {
-        setLocationLoading(false);
-      }
+
+      setCategoryOptions(dynamicCategories.length ? dynamicCategories : ISSUE_CATEGORIES);
     };
 
-    detectLocation();
+    loadCategoryOptions();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleChange = (event) => {
@@ -84,7 +117,12 @@ export default function ReportIssuePage() {
     if (!formData.title.trim()) nextErrors.title = 'Issue title is required.';
     if (!formData.description.trim()) nextErrors.description = 'Description is required.';
     if (!formData.category) nextErrors.category = 'Category is required.';
+    if (!formData.blockNumber.trim()) nextErrors.blockNumber = 'Block number is required.';
+    if (!formData.floorNumber.trim()) nextErrors.floorNumber = 'Floor number is required.';
     if (!formData.location.trim()) nextErrors.location = 'Location is required.';
+    else if (formData.latitude === null || formData.longitude === null) {
+      nextErrors.location = 'Unable to detect valid coordinates. Please tap Re-detect Location.';
+    }
     if (!formData.imageUrl) nextErrors.imageUrl = 'Photo is required (capture from camera).';
 
     setErrors(nextErrors);
@@ -97,12 +135,16 @@ export default function ReportIssuePage() {
 
     setLoading(true);
 
+    const normalizedCoordinates = formatLocationCoordinates(formData.latitude, formData.longitude);
+
     const issuePayload = {
       id: generateIssueId(),
       title: formData.title,
       description: formData.description,
       category: formData.category,
-      location: formData.location,
+      location: normalizedCoordinates,
+      blockNumber: formData.blockNumber.trim(),
+      floorNumber: formData.floorNumber.trim(),
       latitude: formData.latitude,
       longitude: formData.longitude,
       imageUrl: formData.imageUrl,
@@ -165,11 +207,17 @@ export default function ReportIssuePage() {
                   <Loader size={16} className="animate-spin" />
                   <span>Detecting GPS location...</span>
                 </div>
-              ) : formData.latitude ? (
+              ) : formData.latitude !== null && formData.longitude !== null ? (
                 <div>
                   <p className="text-sm text-blue-800 font-mono">
                     {formatLocationCoordinates(formData.latitude, formData.longitude)}
                   </p>
+                  {locationAccuracy !== null && (
+                    <p className={`mt-1 text-xs ${locationAccuracy > 100 ? 'text-amber-700' : 'text-blue-700'}`}>
+                      Accuracy: {Math.round(locationAccuracy)} meters
+                      {locationAccuracy > 100 ? ' (low - move near a window/open area and tap Re-detect)' : ''}
+                    </p>
+                  )}
                   <p className="text-xs text-blue-600 mt-1">
                     <a
                       href={`https://maps.google.com/?q=${formData.latitude},${formData.longitude}`}
@@ -184,6 +232,17 @@ export default function ReportIssuePage() {
               ) : (
                 <p className="text-sm text-red-700">Location detection failed. Please enable location access.</p>
               )}
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={detectLocation}
+                  disabled={locationLoading}
+                  className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {locationLoading ? 'Detecting...' : 'Re-detect Location'}
+                </button>
+              </div>
             </div>
 
             <FormField
@@ -219,9 +278,29 @@ export default function ReportIssuePage() {
               value={formData.category}
               onChange={handleChange}
               error={errors.category}
-              options={ISSUE_CATEGORIES}
+              options={categoryOptions}
               placeholder="Select category"
             />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                id="blockNumber"
+                label="Block Number"
+                value={formData.blockNumber}
+                onChange={handleChange}
+                placeholder="Ex: Block A / CSE Block"
+                error={errors.blockNumber}
+              />
+
+              <FormField
+                id="floorNumber"
+                label="Floor Number"
+                value={formData.floorNumber}
+                onChange={handleChange}
+                placeholder="Ex: Floor 2"
+                error={errors.floorNumber}
+              />
+            </div>
 
             {/* Camera Capture Section */}
             <div className="rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 p-4">
@@ -324,6 +403,15 @@ export default function ReportIssuePage() {
       <CameraModal
         isOpen={cameraOpen}
         onCapture={handleCameraCapture}
+        captureMetaLines={[
+          `Block: ${formData.blockNumber || 'N/A'} | Floor: ${formData.floorNumber || 'N/A'}`,
+          `Coords: ${
+            formData.latitude !== null && formData.longitude !== null
+              ? formatLocationCoordinates(formData.latitude, formData.longitude)
+              : 'Not Available'
+          }`,
+          `Captured: ${new Date().toLocaleString()}`,
+        ]}
         onClose={() => setCameraOpen(false)}
       />
     </DashboardShell>

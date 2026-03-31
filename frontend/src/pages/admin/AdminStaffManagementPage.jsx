@@ -325,11 +325,25 @@ export default function AdminStaffManagementPage() {
               className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none sm:w-56"
             >
               <option value="all">All Departments</option>
-              <option value="Maintenance">Maintenance</option>
-              <option value="Electrical">Electrical</option>
-              <option value="Plumbing">Plumbing</option>
-              <option value="Network">Network</option>
-              <option value="Facilities">Facilities</option>
+              <option value="Agricultural Engineering">Agricultural Engineering</option>
+              <option value="Artificial Intelligence and Data Science">Artificial Intelligence and Data Science</option>
+              <option value="Biomedical Engineering">Biomedical Engineering</option>
+              <option value="Chemical Engineering">Chemical Engineering</option>
+              <option value="Chemistry">Chemistry</option>
+              <option value="Civil Engineering">Civil Engineering</option>
+              <option value="Computer Science and Engineering">Computer Science and Engineering</option>
+              <option value="Cyber Security">Cyber Security</option>
+              <option value="Electrical and Electronics Engineering">Electrical and Electronics Engineering</option>
+              <option value="Electronics and Communication Engineering">Electronics and Communication Engineering</option>
+              <option value="English">English</option>
+              <option value="Information Technology">Information Technology</option>
+              <option value="Internet of Things">Internet of Things</option>
+              <option value="Master of Business Administration">Master of Business Administration</option>
+              <option value="Master of Computer Applications">Master of Computer Applications</option>
+              <option value="Maths">Maths</option>
+              <option value="Mechanical Engineering">Mechanical Engineering</option>
+              <option value="News Letter">News Letter</option>
+              <option value="Physics">Physics</option>
             </select>
 
             <select
