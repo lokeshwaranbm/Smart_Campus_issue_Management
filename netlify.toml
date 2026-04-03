@@ -6,7 +6,7 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://smart-campus-backend.onrender.com/api/:splat"
+  to = "https://smart-campus-issue-management.onrender.com/api/:splat"
   status = 200
   force = true
 
