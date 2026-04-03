@@ -60,6 +60,10 @@ const connectDatabase = async () => {
   slaJobs = initializeSLAJobs();
 };
 
+app.get('/', (req, res) => {
+  res.send('✅ Backend is running successfully');
+});
+
 app.get('/api/health', (_, res) => {
   res.status(200).json({
     ok: true,
