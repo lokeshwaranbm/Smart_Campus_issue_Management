@@ -11,12 +11,12 @@ import { initializeSLAJobs, stopSLAJobs } from './jobs/slaMonitor.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/smart-campus';
+const DB_NAME = process.env.DB_NAME || 'smart-campus';
+const MONGODB_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 let mongoConnection = null;
 let slaJobs = null;
-let activeMongoUri = MONGODB_URI;
 let server = null;
 
 app.use(
@@ -30,13 +30,30 @@ app.use(
 app.use(express.json());
 
 const connectDatabase = async () => {
+  if (!MONGODB_URI) {
+    throw new Error('Missing MONGO_URI (or MONGODB_URI). Set your MongoDB Atlas connection string in environment variables.');
+  }
+
+  mongoose.connection.on('connected', () => {
+    console.log(`✅ MongoDB connected (${mongoose.connection.name})`);
+  });
+
+  mongoose.connection.on('error', (err) => {
+    console.error('❌ MongoDB connection error:', err.message);
+  });
+
+  mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️ MongoDB disconnected');
+  });
+
   try {
-    mongoConnection = await mongoose.connect(MONGODB_URI);
-    activeMongoUri = MONGODB_URI;
-    console.log('✅ MongoDB connected successfully');
+    mongoConnection = await mongoose.connect(MONGODB_URI, {
+      dbName: DB_NAME,
+      serverSelectionTimeoutMS: 10000,
+    });
   } catch (error) {
     console.error('❌ Failed to connect MongoDB:', error.message);
-    throw new Error('Database connection failed. Set a valid MONGODB_URI for your real MongoDB instance.');
+    throw new Error('Database connection failed. Verify MONGO_URI/MONGODB_URI, DB_NAME, Atlas user/network access, and retry.');
   }
 
   // Initialize SLA monitoring jobs after DB connection
@@ -102,8 +119,8 @@ const startServer = async () => {
   await connectDatabase();
 
   server = app.listen(PORT, () => {
-    console.log(`🚀 Backend running on http://localhost:${PORT}`);
-    console.log(`📊 Database: ${activeMongoUri}`);
+    console.log(`🚀 Backend running on port ${PORT}`);
+    console.log(`📊 Database: ${DB_NAME}`);
   });
 };
 
