@@ -1,10 +1,13 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import { Issue } from '../models/Issue.js';
 import { User } from '../models/User.js';
 import { Category } from '../models/Category.js';
 import { AppSettings, APP_SETTINGS_DEFAULTS } from '../models/AppSettings.js';
+import { IssueAttachment } from '../models/IssueAttachment.js';
 import { IssueComment } from '../models/IssueComment.js';
 import { IssueUpdate } from '../models/IssueUpdate.js';
+import { IssueSLA } from '../models/IssueSLA.js';
 import { Notification } from '../models/Notification.js';
 
 export const issueRouter = express.Router();
@@ -904,9 +907,52 @@ issueRouter.post('/issues/:id/support', async (req, res) => {
 // DELETE /api/issues/:id
 issueRouter.delete('/issues/:id', async (req, res) => {
   try {
-    const issue = await Issue.findOneAndDelete({ id: req.params.id });
-    if (!issue) return res.status(404).json({ message: 'Issue not found' });
-    return res.json({ message: 'Issue deleted' });
+    const session = await mongoose.startSession();
+    let deletedIssue = null;
+    let deletedCounts = {
+      issueUpdates: 0,
+      issueComments: 0,
+      issueAttachments: 0,
+      issueSla: 0,
+      notifications: 0,
+    };
+
+    try {
+      await session.withTransaction(async () => {
+        deletedIssue = await Issue.findOneAndDelete({ id: req.params.id }, { session });
+
+        if (!deletedIssue) {
+          return;
+        }
+
+        const issueObjectId = deletedIssue._id;
+
+        const [issueUpdateResult, issueCommentResult, issueAttachmentResult, issueSlaResult, notificationResult] = await Promise.all([
+          IssueUpdate.deleteMany({ issueId: issueObjectId }, { session }),
+          IssueComment.deleteMany({ issueId: issueObjectId }, { session }),
+          IssueAttachment.deleteMany({ issueId: issueObjectId }, { session }),
+          IssueSLA.deleteMany({ issueId: issueObjectId }, { session }),
+          Notification.deleteMany({ issueId: issueObjectId }, { session }),
+        ]);
+
+        deletedCounts = {
+          issueUpdates: issueUpdateResult.deletedCount || 0,
+          issueComments: issueCommentResult.deletedCount || 0,
+          issueAttachments: issueAttachmentResult.deletedCount || 0,
+          issueSla: issueSlaResult.deletedCount || 0,
+          notifications: notificationResult.deletedCount || 0,
+        };
+      });
+    } finally {
+      await session.endSession();
+    }
+
+    if (!deletedIssue) return res.status(404).json({ message: 'Issue not found' });
+
+    return res.json({
+      message: 'Issue and related data deleted successfully',
+      deletedCounts,
+    });
   } catch (err) {
     console.error('DELETE /issues/:id error:', err);
     return res.status(500).json({ message: 'Server error' });

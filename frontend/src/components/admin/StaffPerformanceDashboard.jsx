@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, Clock, CheckCircle, AlertCircle, Users, BarChart3 } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, AlertCircle, Users, BarChart3, X } from 'lucide-react';
 
 export default function StaffPerformanceDashboard({ onClose, staffList = [] }) {
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -62,7 +62,7 @@ export default function StaffPerformanceDashboard({ onClose, staffList = [] }) {
           </div>
           {onClose && (
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-              ✕
+              <X size={18} />
             </button>
           )}
         </div>

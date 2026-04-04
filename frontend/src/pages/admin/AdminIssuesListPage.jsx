@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash2, AlertTriangle, Filter } from 'lucide-react';
+import { ArrowLeft, Trash2, AlertTriangle, Filter, X, Loader2 } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import { getIssues, deleteIssue } from '../../utils/issues';
 import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
@@ -12,6 +12,9 @@ export default function AdminIssuesListPage() {
   const [overdueIssues, setOverdueIssues] = useState([]);
   const [activeStatusFilter, setActiveStatusFilter] = useState(null);
   const [sortBy, setSortBy] = useState('newest');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   const loadIssues = () => {
     getIssues().then(setAllIssues).catch(() => setAllIssues([]));
@@ -37,16 +40,44 @@ export default function AdminIssuesListPage() {
     loadOverdueIssues();
   }, []);
 
-  const handleDeleteIssue = async (issueId, issueTitle) => {
-    const confirmed = window.confirm(
-      `⚠️ Delete Issue?\n\n"${issueTitle}"\n\nThis will permanently delete this issue from:\n• Campus Feed\n• Staff Dashboard\n• All Reports\n\nThis action CANNOT be undone!\n\nClick OK to delete.`
-    );
+  useEffect(() => {
+    if (!notice) return undefined;
 
-    if (!confirmed) return;
+    const timer = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
-    await deleteIssue(issueId);
-    loadIssues();
-    alert('✅ Issue deleted successfully!');
+  const openDeleteModal = (issue) => {
+    setDeleteTarget(issue);
+    setNotice(null);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setDeleteTarget(null);
+  };
+
+  const handleDeleteIssue = async () => {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+    try {
+      const result = await deleteIssue(deleteTarget.id);
+      loadIssues();
+      loadOverdueIssues();
+      setNotice({
+        type: 'success',
+        message: result?.message || 'Issue and related data deleted successfully.',
+      });
+      setDeleteTarget(null);
+    } catch (error) {
+      setNotice({
+        type: 'error',
+        message: error.message || 'Failed to delete issue. Please try again.',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Group issues by status
@@ -114,6 +145,31 @@ export default function AdminIssuesListPage() {
         Back to Dashboard
       </button>
 
+      {notice && (
+        <div
+          className={`mb-6 flex items-start justify-between gap-4 rounded-2xl border px-4 py-3 shadow-sm ${
+            notice.type === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : 'border-rose-200 bg-rose-50 text-rose-900'
+          }`}
+        >
+          <div>
+            <p className="text-sm font-semibold">
+              {notice.type === 'success' ? 'Deletion completed' : 'Deletion failed'}
+            </p>
+            <p className="text-sm opacity-90">{notice.message}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            className="rounded-full p-1 transition hover:bg-black/5"
+            aria-label="Dismiss message"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Overdue Issues Section - Always Show if Any */}
       {overdueIssues && overdueIssues.length > 0 && (
         <div className="mb-8 rounded-lg border-2 border-red-300 bg-gradient-to-r from-red-50 to-red-100 shadow-lg overflow-hidden">
@@ -121,7 +177,7 @@ export default function AdminIssuesListPage() {
             <div className="flex items-center gap-3">
               <AlertTriangle size={28} className="text-white animate-pulse" />
               <div>
-                <h2 className="text-xl font-bold text-white">⚠️ OVERDUE ISSUES - Immediate Action Required</h2>
+                <h2 className="text-xl font-bold text-white">Overdue Issues - Immediate Action Required</h2>
                 <p className="text-sm text-red-100">Issues past their SLA deadline</p>
               </div>
             </div>
@@ -269,7 +325,7 @@ export default function AdminIssuesListPage() {
                         View
                       </button>
                       <button
-                        onClick={() => handleDeleteIssue(issue.id, issue.title)}
+                        onClick={() => openDeleteModal(issue)}
                         className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-2 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-200"
                         title="Delete this issue permanently"
                       >
@@ -290,6 +346,64 @@ export default function AdminIssuesListPage() {
           </div>
         )}
       </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-issue-title"
+            className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+          >
+            <div className="border-b border-slate-100 bg-gradient-to-r from-rose-50 via-white to-amber-50 px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">Permanent Action</p>
+                  <h3 id="delete-issue-title" className="text-xl font-bold text-slate-900">
+                    Delete issue permanently?
+                  </h3>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-5 px-6 py-6">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Issue</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{deleteTarget.title}</p>
+                <p className="mt-1 font-mono text-xs text-slate-500">ID: {deleteTarget.id}</p>
+              </div>
+
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+                This will remove the issue and its related records, including updates, comments, attachments,
+                SLA data, and notifications.
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  disabled={isDeleting}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteIssue}
+                  disabled={isDeleting}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  {isDeleting ? 'Deleting...' : 'Delete permanently'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardShell>
   );
 }
