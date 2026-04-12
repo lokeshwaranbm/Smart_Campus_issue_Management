@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { clearAuthSession } from '../../utils/auth';
+import { clearAuthSession, getAuthSession } from '../../utils/auth';
+import UserAccountDropdown from './UserAccountDropdown';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -11,6 +12,7 @@ import {
   UserCog,
   Menu,
   X,
+  Clock3,
   BarChart3,
   Briefcase
 } from 'lucide-react';
@@ -18,8 +20,32 @@ import {
 export default function DashboardShell({ title, subtitle, roleLabel, children }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const session = getAuthSession();
   const [openDropdown, setOpenDropdown] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const expectedRole =
+      roleLabel === 'Admin'
+        ? 'admin'
+        : roleLabel === 'Maintenance'
+          ? 'maintenance'
+          : roleLabel === 'Student'
+            ? 'student'
+            : null;
+
+    if (expectedRole && session?.role && session.role !== expectedRole) {
+      clearAuthSession();
+      navigate('/login', { replace: true });
+    }
+  }, [roleLabel, session?.role, navigate]);
+
+  const getDashboardHomePath = () => {
+    if (session?.role === 'admin') return '/dashboard/admin';
+    if (session?.role === 'maintenance') return '/dashboard/maintenance';
+    if (session?.role === 'student') return '/dashboard/student';
+    return '/login';
+  };
 
   const handleLogout = () => {
     clearAuthSession();
@@ -44,6 +70,11 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
           label: 'Reporter Management',
           icon: Users,
           path: '/admin/reporters',
+        },
+        {
+          label: 'SLA Monitor',
+          icon: Clock3,
+          path: '/admin/sla-monitoring',
         },
         {
           label: 'Settings',
@@ -78,7 +109,7 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           {/* Logo Section */}
           <button
-            onClick={() => handleNavigation('/dashboard/admin')}
+            onClick={() => handleNavigation(getDashboardHomePath())}
             className="flex items-center gap-2 transition hover:opacity-80"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 shadow-md">
@@ -164,21 +195,10 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
 
           {/* Right Section */}
           <div className="flex items-center gap-3">
-            {/* Role Badge - Hidden on mobile */}
-            <div className="hidden items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 sm:flex">
-              <UserCog size={14} className="text-primary" />
-              <span className="text-xs font-semibold text-primary">{roleLabel}</span>
+            {/* User Account Dropdown - Desktop */}
+            <div className="hidden sm:block">
+              <UserAccountDropdown />
             </div>
-
-            {/* Logout Button - Hidden on mobile */}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="hidden items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:flex"
-            >
-              <LogOut size={16} />
-              <span>Logout</span>
-            </button>
 
             {/* Mobile Menu Button */}
             <button
@@ -222,6 +242,7 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
 
           <div className="h-[calc(100%-73px)] overflow-y-auto p-4">
             <div className="space-y-1">
+              {/* Navigation items */}
               {navigationItems.map((item) => {
                 const Icon = item.icon;
                 const hasDropdown = item.dropdown && item.dropdown.length > 0;
@@ -286,21 +307,15 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
                   </button>
                 );
               })}
+            </div>
 
-              <div className="mt-3 border-t border-slate-200 pt-3">
-                <div className="mb-2 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
-                  <UserCog size={14} className="text-primary" />
-                  <span className="text-xs font-semibold text-primary">{roleLabel}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-                >
-                  <LogOut size={16} />
-                  <span>Logout</span>
-                </button>
+            {/* Mobile Account Section */}
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <div className="mb-3 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
+                <UserCog size={14} className="text-primary" />
+                <span className="text-xs font-semibold text-primary">{roleLabel}</span>
               </div>
+              <UserAccountDropdown />
             </div>
           </div>
         </aside>

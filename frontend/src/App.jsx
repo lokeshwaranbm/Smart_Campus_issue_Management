@@ -5,6 +5,7 @@ import MaintenanceSignupPage from './pages/auth/MaintenanceSignupPage';
 import NotFoundPage from './pages/common/NotFoundPage';
 import RequireRole from './components/dashboard/RequireRole';
 import StudentDashboardPage from './pages/student/StudentDashboardPage';
+import ProfilePage from './pages/common/ProfilePage';
 import ReportIssuePage from './pages/student/ReportIssuePage';
 import StudentIssueDetailPage from './pages/student/StudentIssueDetailPage';
 import MaintenanceDashboardPage from './pages/maintenance/MaintenanceDashboardPage';
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup/student" element={<StudentSignupPage />} />
       <Route path="/signup/maintenance" element={<MaintenanceSignupPage />} />
+      <Route path="/profile" element={<ProfilePage />} />
       <Route
         path="/dashboard/student"
         element={

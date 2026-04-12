@@ -107,51 +107,6 @@ export const assignIssue = async (issueId, department, assignedTo) => {
   return parseResponse(response);
 };
 
-// Returns: { ok, category, data, count }
-export const getContractorsByCategory = async (category) => {
-  const params = new URLSearchParams();
-  if (category) params.set('category', category);
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  const response = await apiFetch(`/api/contractors${qs}`, { method: 'GET' });
-  return parseResponse(response);
-};
-
-// Returns: updated issue object
-export const handleIssueInternally = async (issueId, staffEmail) => {
-  const response = await apiFetch(`/api/issues/${issueId}/handle-internally`, {
-    method: 'PATCH',
-    body: JSON.stringify({ staffEmail }),
-  });
-  return parseResponse(response);
-};
-
-// Returns: updated issue object
-export const bindIssueContractor = async (issueId, contractorEmail, staffEmail) => {
-  const response = await apiFetch(`/api/issues/${issueId}/bind-contractor`, {
-    method: 'PATCH',
-    body: JSON.stringify({ contractorEmail, staffEmail }),
-  });
-  return parseResponse(response);
-};
-
-// Returns: { ok, data, count }
-export const getContractorHistory = async (query = '') => {
-  const params = new URLSearchParams();
-  if (query) params.set('q', query);
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  const response = await apiFetch(`/api/contractor-history${qs}`, { method: 'GET' });
-  return parseResponse(response);
-};
-
-// Returns: updated issue object
-export const assignContractorManually = async (issueId, payload) => {
-  const response = await apiFetch(`/api/issues/${issueId}/assign-contractor-manual`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
-  return parseResponse(response);
-};
-
 // Returns: updated issue object (for setIssue(updated) pattern)
 export const addComment = async (issueId, commentText, userEmail, userName) => {
   const response = await apiFetch(`/api/issues/${issueId}/comments`, {

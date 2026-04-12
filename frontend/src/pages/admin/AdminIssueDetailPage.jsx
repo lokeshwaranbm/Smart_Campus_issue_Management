@@ -8,9 +8,6 @@ import {
   getIssueById,
   updateIssueStatus,
   addIssueRemark,
-  getContractorsByCategory,
-  bindIssueContractor,
-  handleIssueInternally,
 } from '../../utils/issues';
 import { getAuthSession } from '../../utils/auth';
 import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
@@ -29,9 +26,6 @@ export default function AdminIssueDetailPage() {
   const [issue, setIssue] = useState(null);
   const [loading, setLoading] = useState(true);
   const [newStatus, setNewStatus] = useState('');
-  const [contractors, setContractors] = useState([]);
-  const [selectedContractor, setSelectedContractor] = useState('');
-  const [assigning, setAssigning] = useState(false);
   const [remark, setRemark] = useState('');
   const [message, setMessage] = useState('');
 
@@ -46,25 +40,7 @@ export default function AdminIssueDetailPage() {
       .finally(() => setLoading(false));
   };
 
-  const loadContractors = async (category) => {
-    try {
-      const result = await getContractorsByCategory(category);
-      const options = (result?.data || []).map((item) => ({
-        value: item.email,
-        label: `${item.name} (${item.activeLoad ?? 0} active)` ,
-      }));
-      setContractors(options);
-    } catch {
-      setContractors([]);
-    }
-  };
-
   useEffect(() => { loadIssue(); }, [issueId]);
-
-  useEffect(() => {
-    if (!issue?.category) return;
-    loadContractors(issue.category);
-  }, [issue?.category]);
 
   if (loading) {
     return (
@@ -91,34 +67,6 @@ export default function AdminIssueDetailPage() {
     );
   }
 
-  const handleInternalAssignment = async () => {
-    try {
-      setAssigning(true);
-      await handleIssueInternally(issueId, session?.email);
-      setMessage('Issue moved to internal handling (In Progress).');
-      await loadIssue();
-    } catch (error) {
-      setMessage(error.message || 'Failed to switch to internal handling.');
-    } finally {
-      setAssigning(false);
-    }
-  };
-
-  const handleBindContractor = async () => {
-    try {
-      setAssigning(true);
-      await bindIssueContractor(issueId, selectedContractor || undefined, session?.email);
-      setMessage('Contractor bound successfully.');
-      setSelectedContractor('');
-      await loadIssue();
-      await loadContractors(issue?.category);
-    } catch (error) {
-      setMessage(error.message || 'Failed to bind contractor.');
-    } finally {
-      setAssigning(false);
-    }
-  };
-
   const handleStatusUpdate = async () => {
     if (!newStatus) {
       setMessage('Please select a status.');
@@ -143,6 +91,7 @@ export default function AdminIssueDetailPage() {
 
   const priorityColor = ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.color || '';
   const statusLabel = ISSUE_STATUS.find((s) => s.value === issue.status)?.label || issue.status;
+  const showPriority = issue.status !== 'resolved';
   const coordinates = parseLocationCoordinates(issue.location);
   const mapUrl = coordinates ? getLocationMapUrl(coordinates.latitude, coordinates.longitude) : '';
   const mapEmbedUrl = coordinates ? getLocationEmbedUrl(coordinates.latitude, coordinates.longitude) : '';
@@ -160,7 +109,7 @@ export default function AdminIssueDetailPage() {
       <AlertMessage message={message} />
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <div className="space-y-6">
+        <div className="space-y-6 lg:sticky lg:top-28 lg:self-start lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-1">
           <div className="rounded-card border border-slate-200 bg-white p-6 shadow-card">
             <h2 className="mb-4 text-lg font-semibold text-slate-900">Issue Details</h2>
 
@@ -174,6 +123,27 @@ export default function AdminIssueDetailPage() {
                 <p className="text-xs font-medium uppercase text-slate-500">Description</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{issue.description}</p>
               </div>
+
+              {issue.imageUrl && (
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">Uploaded Photo</p>
+                  <a
+                    href={issue.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 block overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition hover:border-blue-300"
+                    title="Open full image"
+                  >
+                    <img
+                      src={issue.imageUrl}
+                      alt={`Issue ${issue.id} uploaded evidence`}
+                      className="h-56 w-full object-cover"
+                      loading="lazy"
+                    />
+                  </a>
+                  <p className="mt-2 text-xs text-slate-500">Click the image to open full size.</p>
+                </div>
+              )}
 
               <div>
                 <p className="text-xs font-medium uppercase text-slate-500">Location</p>
@@ -272,7 +242,7 @@ export default function AdminIssueDetailPage() {
 
         <div className="space-y-6">
           <div className="rounded-card border border-slate-200 bg-white p-6 shadow-card">
-            <h2 className="mb-4 font-semibold text-slate-900">Status & Priority</h2>
+            <h2 className="mb-4 font-semibold text-slate-900">{showPriority ? 'Status & Priority' : 'Status'}</h2>
 
             <div className="space-y-4">
               <div>
@@ -282,41 +252,14 @@ export default function AdminIssueDetailPage() {
                 </p>
               </div>
 
-              <div>
-                <p className="text-xs font-medium uppercase text-slate-500">Priority</p>
-                <p className={`mt-1 inline-block rounded-full px-3 py-1 text-sm font-semibold ${priorityColor}`}>
-                  {ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.label}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-card border border-slate-200 bg-white p-6 shadow-card">
-            <h2 className="mb-4 font-semibold text-slate-900">Assignment</h2>
-
-            <div className="space-y-3">
-              <button onClick={handleInternalAssignment} disabled={assigning} className="primary-button disabled:opacity-60">
-                Handle Internally
-              </button>
-
-              <SelectField
-                id="selectedContractor"
-                label="Bind Contractor"
-                value={selectedContractor}
-                onChange={(e) => setSelectedContractor(e.target.value)}
-                options={contractors}
-                placeholder={contractors.length ? 'Select contractor (optional)' : 'No eligible contractors'}
-              />
-
-              <button onClick={handleBindContractor} disabled={assigning || contractors.length === 0} className="primary-button disabled:opacity-60">
-                Bind Contractor
-              </button>
-
-              {issue.contractorEmail ? (
-                <p className="text-xs text-slate-600">
-                  Current contractor: <span className="font-semibold">{issue.contractorName || issue.contractorEmail}</span>
-                </p>
-              ) : null}
+              {showPriority && (
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">Priority</p>
+                  <p className={`mt-1 inline-block rounded-full px-3 py-1 text-sm font-semibold ${priorityColor}`}>
+                    {ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.label}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

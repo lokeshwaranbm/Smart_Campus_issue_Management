@@ -261,21 +261,23 @@ export default function StudentIssueDetailPage() {
                 </span>
                 <span className="font-semibold text-slate-900">{comments.length}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-600 flex items-center gap-2">
-                  <Zap size={16} />
-                  Priority
-                </span>
-                <span className={`font-semibold capitalize ${
-                  issue.priority === 'high'
-                    ? 'text-red-600'
-                    : issue.priority === 'medium'
-                    ? 'text-amber-600'
-                    : 'text-emerald-600'
-                }`}>
-                  {issue.priority}
-                </span>
-              </div>
+              {issue.status !== 'resolved' && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 flex items-center gap-2">
+                    <Zap size={16} />
+                    Priority
+                  </span>
+                  <span className={`font-semibold capitalize ${
+                    issue.priority === 'high'
+                      ? 'text-red-600'
+                      : issue.priority === 'medium'
+                      ? 'text-amber-600'
+                      : 'text-emerald-600'
+                  }`}>
+                    {issue.priority}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

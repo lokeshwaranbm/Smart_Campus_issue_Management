@@ -6,7 +6,7 @@ import AuthHeader from '../../components/auth/AuthHeader';
 import FormField from '../../components/auth/FormField';
 import PasswordField from '../../components/auth/PasswordField';
 import AlertMessage from '../../components/auth/AlertMessage';
-import { loginUser, resolveRoleRedirect, setAuthSession } from '../../utils/auth';
+import { clearAuthSession, loginUser, resolveRoleRedirect, setAuthSession } from '../../utils/auth';
 import { validateEmail } from '../../utils/validation';
 import useCampusInfo from '../../hooks/useCampusInfo';
 import { 
@@ -50,6 +50,9 @@ export default function LoginPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!validate()) return;
+
+    // Always reset previous session before starting a new login flow.
+    clearAuthSession();
 
     // Check if login attempt is allowed (account not locked)
     const attemptCheck = checkLoginAttempt(formData.email);

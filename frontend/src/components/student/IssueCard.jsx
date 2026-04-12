@@ -6,6 +6,11 @@ import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
 export default function IssueCard({ issue, onSupport, isSupported }) {
   const navigate = useNavigate();
   const session = getAuthSession();
+  const totalComments = Number.isFinite(issue?.commentCount)
+    ? issue.commentCount
+    : Array.isArray(issue?.comments)
+      ? issue.comments.length
+      : 0;
 
   const getStatusColor = (status) => {
     const s = ISSUE_STATUS.find((x) => x.value === status);
@@ -59,9 +64,11 @@ export default function IssueCard({ issue, onSupport, isSupported }) {
             <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusColor(issue.status)}`}>
               {getStatusLabel(issue.status)}
             </span>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getPriorityColor(issue.priority)}`}>
-              {issue.priority?.charAt(0).toUpperCase() + issue.priority?.slice(1)} Priority
-            </span>
+            {issue.status !== 'resolved' && (
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getPriorityColor(issue.priority)}`}>
+                {issue.priority?.charAt(0).toUpperCase() + issue.priority?.slice(1)} Priority
+              </span>
+            )}
           </div>
           <span className="text-xs text-slate-500">{formatDate(issue.createdAt)}</span>
         </div>
@@ -124,7 +131,7 @@ export default function IssueCard({ issue, onSupport, isSupported }) {
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-slate-600 transition hover:bg-slate-100"
             >
               <MessageCircle size={16} />
-              <span>{issue.commentsCount || 0}</span>
+              <span>{totalComments}</span>
             </button>
           </div>
           <button

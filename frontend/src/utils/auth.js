@@ -2,6 +2,21 @@ import { apiFetch } from './apiConfig';
 
 const SESSION_KEY = 'smart-campus-session';
 
+const readSession = () => {
+  const tabSession = sessionStorage.getItem(SESSION_KEY);
+  if (tabSession) return tabSession;
+
+  // Backward-compatibility: migrate old shared session from localStorage once.
+  const legacySession = localStorage.getItem(SESSION_KEY);
+  if (legacySession) {
+    sessionStorage.setItem(SESSION_KEY, legacySession);
+    localStorage.removeItem(SESSION_KEY);
+    return legacySession;
+  }
+
+  return null;
+};
+
 export const registerUser = async (payload) => {
   const endpoint =
     payload.role === 'maintenance' ? '/api/auth/register/maintenance' : '/api/auth/register/student';
@@ -61,24 +76,26 @@ export const loginUser = async ({ email, password }) => {
 
 export const resolveRoleRedirect = (role) => {
   if (role === 'student') return '/dashboard/student';
-  if (role === 'maintenance' || role === 'contractor') return '/dashboard/maintenance';
+  if (role === 'maintenance') return '/dashboard/maintenance';
   return '/dashboard/admin';
 };
 
 export const setAuthSession = (user) => {
-  localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({
-      email: user.email,
-      fullName: user.fullName,
-      role: user.role,
-      status: user.status,
-    })
-  );
+  const payload = JSON.stringify({
+    email: user.email,
+    fullName: user.fullName,
+    role: user.role,
+    status: user.status,
+  });
+
+  // Use tab-scoped storage so multiple accounts can stay logged in across tabs.
+  sessionStorage.setItem(SESSION_KEY, payload);
+  // Remove old shared-session key to prevent account leakage between tabs.
+  localStorage.removeItem(SESSION_KEY);
 };
 
 export const getAuthSession = () => {
-  const session = localStorage.getItem(SESSION_KEY);
+  const session = readSession();
   if (!session) return null;
 
   try {
@@ -89,6 +106,7 @@ export const getAuthSession = () => {
 };
 
 export const clearAuthSession = () => {
+  sessionStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(SESSION_KEY);
 };
 

@@ -125,7 +125,7 @@ staffRouter.post('/admin/staff', async (req, res) => {
 
     res.status(201).json({
       ok: true,
-      message: `${result.staff.role === 'contractor' ? 'Contractor' : 'Staff member'} ${name} created successfully`,
+      message: `Staff member ${name} created successfully`,
       data: result.staff,
       credentials: result.credentials,
     });

@@ -24,10 +24,27 @@ app.use(
     origin: CORS_ORIGIN.split(',').map((o) => o.trim()),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-role', 'x-user-email'],
   })
 );
 app.use(express.json());
+
+app.use('/api', (req, res, next) => {
+  const path = req.path || '';
+
+  if (path.startsWith('/auth') || path === '/health') {
+    return next();
+  }
+
+  if (path.startsWith('/admin')) {
+    const role = String(req.headers['x-user-role'] || '').toLowerCase();
+    if (role !== 'admin') {
+      return res.status(403).json({ ok: false, message: 'Admin access required.' });
+    }
+  }
+
+  return next();
+});
 
 const connectDatabase = async () => {
   if (!MONGODB_URI) {

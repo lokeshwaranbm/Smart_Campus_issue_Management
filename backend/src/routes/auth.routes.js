@@ -4,7 +4,7 @@ import { User } from '../models/User.js';
 export const authRouter = Router();
 
 const getFrontendRole = (dbRole) => {
-  if (dbRole === 'staff' || dbRole === 'contractor') return 'maintenance';
+  if (dbRole === 'staff') return 'maintenance';
   return dbRole;
 };
 

@@ -46,7 +46,6 @@ const IssueAttachmentSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      index: true,
     },
     publicUrl: {
       type: String,

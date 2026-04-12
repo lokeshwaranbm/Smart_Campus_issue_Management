@@ -28,10 +28,22 @@ export const getApiUrl = (endpoint) => {
  */
 export const apiFetch = (endpoint, options = {}) => {
   const url = getApiUrl(endpoint);
+  let session = null;
+
+  try {
+    const SESSION_KEY = 'smart-campus-session';
+    const rawSession = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+    session = JSON.parse(rawSession || 'null');
+  } catch {
+    session = null;
+  }
+
   return fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(session?.role ? { 'x-user-role': session.role } : {}),
+      ...(session?.email ? { 'x-user-email': session.email } : {}),
       ...options.headers,
     },
   });

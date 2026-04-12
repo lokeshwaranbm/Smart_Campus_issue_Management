@@ -33,6 +33,35 @@ const CATEGORY_ALIAS_TO_NAME = {
   other: 'Other',
 };
 
+const ALLOWED_PRIORITIES = new Set(['low', 'medium', 'high', 'critical']);
+
+function getNormalizedIssuePriority(issue) {
+  const reportedPriority = String(issue?.reportedPriority || '').trim().toLowerCase();
+  if (ALLOWED_PRIORITIES.has(reportedPriority)) return reportedPriority;
+
+  const storedPriority = String(issue?.priority || '').trim().toLowerCase();
+  if (!ALLOWED_PRIORITIES.has(storedPriority)) return 'medium';
+
+  // Legacy repair for older data where support toggles downgraded priority to low.
+  if (
+    storedPriority === 'low' &&
+    String(issue?.status || '').toLowerCase() === 'resolved' &&
+    Number(issue?.supports || 0) > 0
+  ) {
+    return 'medium';
+  }
+
+  return storedPriority;
+}
+
+function withNormalizedPriority(issue) {
+  if (!issue) return issue;
+  return {
+    ...issue,
+    priority: getNormalizedIssuePriority(issue),
+  };
+}
+
 // Priority based on support count
 function calculatePriority(supportCount) {
   if (supportCount >= 20) return 'critical';
@@ -85,55 +114,6 @@ async function findCategoryByIssueCategory(categoryKey) {
   }
 
   return null;
-}
-
-async function getEligibleContractorsForCategory(categoryId) {
-  if (!categoryId) return [];
-
-  const contractors = await User.find({
-    role: 'contractor',
-    isActive: true,
-    isSuspended: false,
-    assignedCategories: categoryId,
-  })
-    .select('_id name email department assignedCategories')
-    .lean();
-
-  if (!contractors.length) return [];
-
-  const withLoad = await Promise.all(
-    contractors.map((contractor) =>
-      Issue.countDocuments({
-        contractorEmail: contractor.email,
-        status: { $in: ['contractor_assigned', 'in_progress'] },
-      }).then((count) => ({ ...contractor, activeLoad: count }))
-    )
-  );
-
-  return withLoad.sort((a, b) => a.activeLoad - b.activeLoad || String(a.email).localeCompare(String(b.email)));
-}
-
-async function notifyContractorAssignment(issue, contractor) {
-  try {
-    await Notification.create({
-      userId: contractor._id,
-      issueId: issue._id,
-      message: `New contractor assignment: ${issue.title} (${issue.id})`,
-      type: 'assignment',
-      metadata: {
-        categoryName: issue.category,
-        issueTitle: issue.title,
-        staffName: issue.internalAssignedToName || issue.assignedToName || '',
-        priorityLevel: issue.priority,
-      },
-      actionUrl: `/maintenance/issue/${issue.id}`,
-    });
-  } catch (error) {
-    console.warn('Contractor notification skipped:', error.message);
-  }
-
-  // Placeholder for SMTP integration.
-  console.log(`Email queued to contractor ${contractor.email} for issue ${issue.id}`);
 }
 
 // Find the least-loaded active staff assigned to a category
@@ -236,6 +216,7 @@ issueRouter.post('/issues', async (req, res) => {
       title,
       description,
       category,
+      priority,
       location,
       blockNumber,
       floorNumber,
@@ -249,6 +230,16 @@ issueRouter.post('/issues', async (req, res) => {
     if (!id || !title || !description || !category || !studentEmail) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
+
+    const reporter = await User.findOne({ email: String(studentEmail).toLowerCase() }).lean();
+    if (!reporter || reporter.role !== 'student' || reporter.isSuspended || !reporter.isActive) {
+      return res.status(403).json({
+        message: 'Only active student accounts can submit issues.',
+      });
+    }
+
+    const inputPriority = String(priority || '').trim().toLowerCase();
+    const normalizedPriority = ALLOWED_PRIORITIES.has(inputPriority) ? inputPriority : 'medium';
 
     const { bestStaff, matchedCategory, nextPointer } = await findBestStaffForCategory(category);
 
@@ -264,9 +255,10 @@ issueRouter.post('/issues', async (req, res) => {
       latitude: latitude ?? null,
       longitude: longitude ?? null,
       imageUrl: imageUrl ?? null,
-      studentEmail,
-      studentName: studentName || '',
-      priority: 'low',
+      studentEmail: reporter.email,
+      studentName: reporter.name || studentName || '',
+      priority: normalizedPriority,
+      reportedPriority: normalizedPriority,
       status: bestStaff ? 'assigned' : 'submitted',
       assignedTo: bestStaff ? bestStaff.email : null,
       assignedToName: bestStaff ? bestStaff.name : null,
@@ -337,7 +329,7 @@ issueRouter.get('/issues', async (req, res) => {
     if (assignedDepartment) filter.assignedDepartment = assignedDepartment;
 
     const issues = await Issue.find(filter).sort({ createdAt: -1 }).lean();
-    return res.json(issues);
+    return res.json(issues.map(withNormalizedPriority));
   } catch (err) {
     console.error('GET /issues error:', err);
     return res.status(500).json({ message: 'Server error' });
@@ -349,7 +341,7 @@ issueRouter.get('/issues/:id', async (req, res) => {
   try {
     const issue = await Issue.findOne({ id: req.params.id }).lean();
     if (!issue) return res.status(404).json({ message: 'Issue not found' });
-    return res.json(issue);
+    return res.json(withNormalizedPriority(issue));
   } catch (err) {
     console.error('GET /issues/:id error:', err);
     return res.status(500).json({ message: 'Server error' });
@@ -383,372 +375,6 @@ issueRouter.patch('/issues/:id/status', async (req, res) => {
     return res.json(issue);
   } catch (err) {
     console.error('PATCH /issues/:id/status error:', err);
-    return res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// PATCH /api/issues/:id/handle-internally
-issueRouter.patch('/issues/:id/handle-internally', async (req, res) => {
-  try {
-    const { staffEmail } = req.body;
-
-    const currentIssue = await Issue.findOne({ id: req.params.id });
-    if (!currentIssue) return res.status(404).json({ message: 'Issue not found' });
-
-    const update = {
-      status: 'in_progress',
-      contractorStatus: 'none',
-      contractorEmail: null,
-      contractorName: null,
-      contractorId: null,
-      contractorAssignedAt: null,
-      contractorRespondedAt: null,
-    };
-
-    let selectedStaff = null;
-    let matchedCategory = null;
-    let nextPointer = null;
-
-    if (staffEmail) {
-      selectedStaff = await User.findOne({
-        email: staffEmail,
-        role: 'staff',
-        isActive: true,
-        isSuspended: false,
-      }).lean();
-    }
-
-    if (!selectedStaff && currentIssue.internalAssignedTo) {
-      selectedStaff = await User.findOne({
-        email: currentIssue.internalAssignedTo,
-        role: 'staff',
-        isActive: true,
-        isSuspended: false,
-      }).lean();
-    }
-
-    if (!selectedStaff && currentIssue.assignedTo) {
-      selectedStaff = await User.findOne({
-        email: currentIssue.assignedTo,
-        role: 'staff',
-        isActive: true,
-        isSuspended: false,
-      }).lean();
-    }
-
-    if (!selectedStaff) {
-      const autoPick = await findBestStaffForCategory(currentIssue.category);
-      selectedStaff = autoPick.bestStaff || null;
-      matchedCategory = autoPick.matchedCategory || null;
-      nextPointer = autoPick.nextPointer;
-    }
-
-    if (!selectedStaff) {
-      return res.status(400).json({
-        message: 'No eligible active staff found for this category. Please assign staff in Category Management.',
-      });
-    }
-
-    update.assignedTo = selectedStaff.email;
-    update.assignedToName = selectedStaff.name;
-    update.assignedToId = selectedStaff._id;
-    update.assignedDepartment = selectedStaff.department || null;
-    update.assignedAt = new Date();
-    update.internalAssignedTo = selectedStaff.email;
-    update.internalAssignedToName = selectedStaff.name;
-    update.internalAssignedToId = selectedStaff._id;
-    update.internalAssignedDepartment = selectedStaff.department || null;
-
-    const issue = await Issue.findOneAndUpdate({ id: req.params.id }, update, { new: true });
-
-    if (matchedCategory?._id && Number.isInteger(nextPointer)) {
-      await Category.updateOne({ _id: matchedCategory._id }, { $set: { autoAssignPointer: nextPointer } });
-    }
-
-    await createIssueUpdateSafe({
-      issueId: issue._id,
-      eventType: 'status_changed',
-      previousValue: { status: currentIssue.status },
-      newValue: { status: issue.status },
-      note: `Switched to internal handling by ${selectedStaff.email}`,
-      changedByEmail: staffEmail || null,
-    });
-
-    return res.json(issue);
-  } catch (err) {
-    console.error('PATCH /issues/:id/handle-internally error:', err);
-    return res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// GET /api/contractors?category=<category>
-issueRouter.get('/contractors', async (req, res) => {
-  try {
-    const { category } = req.query;
-    const matchedCategory = await findCategoryByIssueCategory(category);
-    const contractors = await getEligibleContractorsForCategory(matchedCategory?._id || null);
-
-    return res.json({
-      ok: true,
-      category: matchedCategory?.name || null,
-      data: contractors,
-      count: contractors.length,
-    });
-  } catch (err) {
-    console.error('GET /contractors error:', err);
-    return res.status(500).json({ ok: false, message: 'Server error' });
-  }
-});
-
-// GET /api/contractor-history?q=<name>
-issueRouter.get('/contractor-history', async (req, res) => {
-  try {
-    const query = String(req.query?.q || '').trim();
-    const filter = {
-      contractorName: { $exists: true, $ne: '' },
-    };
-
-    if (query) {
-      filter.contractorName = { $regex: escapeRegex(query), $options: 'i' };
-    }
-
-    const history = await Issue.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: '$contractorName',
-          contractorName: { $first: '$contractorName' },
-          companyName: { $first: '$contractorCompanyName' },
-          phone: { $first: '$contractorPhone' },
-          email: { $first: '$contractorEmail' },
-          uses: { $sum: 1 },
-          latestAssignedAt: { $max: '$contractorAssignedAt' },
-        },
-      },
-      { $sort: { uses: -1, latestAssignedAt: -1 } },
-      { $limit: 20 },
-      {
-        $project: {
-          _id: 0,
-          contractorName: 1,
-          companyName: 1,
-          phone: 1,
-          email: 1,
-          uses: 1,
-        },
-      },
-    ]);
-
-    return res.json({ ok: true, data: history, count: history.length });
-  } catch (err) {
-    console.error('GET /contractor-history error:', err);
-    return res.status(500).json({ ok: false, message: 'Server error' });
-  }
-});
-
-// PATCH /api/issues/:id/assign-contractor-manual
-issueRouter.patch('/issues/:id/assign-contractor-manual', async (req, res) => {
-  try {
-    const {
-      assignedBy,
-      contractorName,
-      companyName,
-      phone,
-      email,
-      estimatedCost,
-      expectedCompletionDate,
-      remarks,
-    } = req.body || {};
-
-    if (!contractorName || !phone || !email) {
-      return res.status(400).json({ message: 'Contractor name, phone, and email are required' });
-    }
-
-    const currentIssue = await Issue.findOne({ id: req.params.id });
-    if (!currentIssue) return res.status(404).json({ message: 'Issue not found' });
-
-    if (!currentIssue.internalAssignedTo) {
-      const fallbackStaff = currentIssue.assignedTo
-        ? await User.findOne({ email: currentIssue.assignedTo, role: 'staff', isActive: true, isSuspended: false }).lean()
-        : null;
-
-      if (fallbackStaff) {
-        currentIssue.internalAssignedTo = fallbackStaff.email;
-        currentIssue.internalAssignedToName = fallbackStaff.name;
-        currentIssue.internalAssignedToId = fallbackStaff._id;
-        currentIssue.internalAssignedDepartment = fallbackStaff.department || null;
-      }
-    }
-
-    currentIssue.contractorName = String(contractorName).trim();
-    currentIssue.contractorCompanyName = String(companyName || '').trim();
-    currentIssue.contractorPhone = String(phone || '').trim();
-    currentIssue.contractorEmail = String(email || '').trim().toLowerCase();
-    currentIssue.contractorEstimatedCost = Number.isFinite(Number(estimatedCost)) ? Number(estimatedCost) : null;
-    currentIssue.contractorExpectedCompletionDate = expectedCompletionDate ? new Date(expectedCompletionDate) : null;
-    currentIssue.contractorRemarks = String(remarks || '').trim();
-    currentIssue.contractorStatus = 'pending';
-    currentIssue.contractorAssignedAt = new Date();
-    currentIssue.contractorRespondedAt = null;
-
-    currentIssue.assignedTo = currentIssue.contractorEmail;
-    currentIssue.assignedToName = currentIssue.contractorName;
-    currentIssue.assignedToId = null;
-    currentIssue.assignedToType = 'contractor';
-    currentIssue.assignedBy = assignedBy || null;
-    currentIssue.status = 'assigned';
-    currentIssue.assignedAt = new Date();
-    currentIssue.autoAssigned = false;
-
-    await currentIssue.save();
-
-    await createIssueUpdateSafe({
-      issueId: currentIssue._id,
-      eventType: 'reassigned',
-      previousValue: {
-        assignedTo: currentIssue.internalAssignedTo,
-      },
-      newValue: {
-        assignedTo: currentIssue.assignedTo,
-        assignedToType: currentIssue.assignedToType,
-      },
-      note: `Manually assigned to contractor ${currentIssue.contractorName}`,
-      changedByEmail: assignedBy || null,
-    });
-
-    return res.json(currentIssue);
-  } catch (err) {
-    console.error('PATCH /issues/:id/assign-contractor-manual error:', err);
-    return res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// PATCH /api/issues/:id/bind-contractor
-issueRouter.patch('/issues/:id/bind-contractor', async (req, res) => {
-  try {
-    const { contractorEmail, staffEmail } = req.body;
-    const issue = await Issue.findOne({ id: req.params.id });
-    if (!issue) return res.status(404).json({ message: 'Issue not found' });
-
-    const matchedCategory = issue.categoryId
-      ? await Category.findById(issue.categoryId).lean()
-      : await findCategoryByIssueCategory(issue.category);
-
-    if (!matchedCategory?._id) {
-      return res.status(400).json({ message: 'No active category found for this issue' });
-    }
-
-    const contractors = await getEligibleContractorsForCategory(matchedCategory._id);
-    if (!contractors.length) {
-      return res.status(400).json({ message: 'No eligible contractors available for this category' });
-    }
-
-    const selectedContractor = contractorEmail
-      ? contractors.find((c) => String(c.email).toLowerCase() === String(contractorEmail).toLowerCase())
-      : contractors[0];
-
-    if (!selectedContractor) {
-      return res.status(400).json({ message: 'Selected contractor is not eligible for this category' });
-    }
-
-    const currentStaff = issue.assignedTo
-      ? await User.findOne({ email: issue.assignedTo, role: 'staff' }).lean()
-      : null;
-
-    issue.internalAssignedTo = currentStaff?.email || issue.internalAssignedTo || issue.assignedTo || null;
-    issue.internalAssignedToName = currentStaff?.name || issue.internalAssignedToName || issue.assignedToName || null;
-    issue.internalAssignedToId = currentStaff?._id || issue.internalAssignedToId || issue.assignedToId || null;
-    issue.internalAssignedDepartment = currentStaff?.department || issue.internalAssignedDepartment || issue.assignedDepartment || null;
-
-    issue.contractorEmail = selectedContractor.email;
-    issue.contractorName = selectedContractor.name;
-    issue.contractorId = selectedContractor._id;
-    issue.contractorStatus = 'pending';
-    issue.contractorAssignedAt = new Date();
-    issue.contractorRespondedAt = null;
-
-    issue.assignedTo = selectedContractor.email;
-    issue.assignedToName = selectedContractor.name;
-    issue.assignedToId = selectedContractor._id;
-    issue.assignedDepartment = selectedContractor.department || issue.assignedDepartment;
-    issue.status = 'contractor_assigned';
-    issue.assignedAt = new Date();
-
-    await issue.save();
-
-    await notifyContractorAssignment(issue, selectedContractor);
-
-    await createIssueUpdateSafe({
-      issueId: issue._id,
-      eventType: 'reassigned',
-      previousValue: {
-        assignedTo: issue.internalAssignedTo,
-        status: 'assigned',
-      },
-      newValue: {
-        assignedTo: issue.assignedTo,
-        status: issue.status,
-      },
-      note: `Contractor bound by ${staffEmail || 'staff'}: ${selectedContractor.email}`,
-      changedByEmail: staffEmail || null,
-    });
-
-    return res.json(issue);
-  } catch (err) {
-    console.error('PATCH /issues/:id/bind-contractor error:', err);
-    return res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// PATCH /api/issues/:id/contractor-response
-issueRouter.patch('/issues/:id/contractor-response', async (req, res) => {
-  try {
-    const { contractorEmail, action, note } = req.body;
-
-    if (!contractorEmail || !['accept', 'reject'].includes(action)) {
-      return res.status(400).json({ message: 'contractorEmail and action (accept/reject) are required' });
-    }
-
-    const issue = await Issue.findOne({ id: req.params.id });
-    if (!issue) return res.status(404).json({ message: 'Issue not found' });
-
-    if (String(issue.contractorEmail || '').toLowerCase() !== String(contractorEmail).toLowerCase()) {
-      return res.status(403).json({ message: 'Contractor does not match bound contractor' });
-    }
-
-    const previousStatus = issue.status;
-
-    if (action === 'accept') {
-      issue.contractorStatus = 'accepted';
-      issue.status = 'in_progress';
-      issue.contractorRespondedAt = new Date();
-    } else {
-      issue.contractorStatus = 'rejected';
-      issue.contractorRespondedAt = new Date();
-      issue.status = issue.internalAssignedTo ? 'assigned' : 'submitted';
-      issue.assignedTo = issue.internalAssignedTo || null;
-      issue.assignedToName = issue.internalAssignedToName || null;
-      issue.assignedToId = issue.internalAssignedToId || null;
-      issue.assignedDepartment = issue.internalAssignedDepartment || null;
-    }
-
-    await issue.save();
-
-    await createIssueUpdateSafe({
-      issueId: issue._id,
-      eventType: 'status_changed',
-      previousValue: { status: previousStatus },
-      newValue: { status: issue.status },
-      note:
-        action === 'accept'
-          ? `Contractor ${contractorEmail} accepted assignment`
-          : `Contractor ${contractorEmail} rejected assignment${note ? `: ${note}` : ''}`,
-      changedByEmail: contractorEmail,
-    });
-
-    return res.json(issue);
-  } catch (err) {
-    console.error('PATCH /issues/:id/contractor-response error:', err);
     return res.status(500).json({ message: 'Server error' });
   }
 });
@@ -889,11 +515,10 @@ issueRouter.post('/issues/:id/support', async (req, res) => {
 
     const updated = await Issue.findOneAndUpdate({ id: req.params.id }, update, { new: true });
     const newCount = updated.supportedBy.length;
-    const newPriority = calculatePriority(newCount);
 
     await Issue.findOneAndUpdate(
       { id: req.params.id },
-      { supports: newCount, priority: newPriority }
+      { supports: newCount }
     );
 
     const final = await Issue.findOne({ id: req.params.id }).lean();

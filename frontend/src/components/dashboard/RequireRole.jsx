@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { getAuthSession } from '../../utils/auth';
+import { clearAuthSession, getAuthSession } from '../../utils/auth';
 
 export default function RequireRole({ allowedRole, children }) {
   const session = getAuthSession();
@@ -9,6 +9,7 @@ export default function RequireRole({ allowedRole, children }) {
   }
 
   if (session.role !== allowedRole) {
+    clearAuthSession();
     return <Navigate to="/login" replace />;
   }
 

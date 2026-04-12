@@ -17,8 +17,12 @@ export default function MaintenanceDashboardPage() {
   }, []);
 
   const assignedIssues = useMemo(() => {
-    return allIssues.filter((i) => i.assignedDepartment === session?.department || (i.status !== 'submitted' && i.assignedDepartment));
-  }, [allIssues, session?.department]);
+    return allIssues.filter((issue) => {
+      const isAssignedToCurrentStaff = issue.assignedTo && issue.assignedTo === session?.email;
+      const isLegacyDepartmentAssignment = !issue.assignedTo && issue.assignedDepartment === session?.department;
+      return isAssignedToCurrentStaff || isLegacyDepartmentAssignment;
+    });
+  }, [allIssues, session?.department, session?.email]);
 
   const stats = useMemo(
     () => ({
@@ -55,32 +59,69 @@ export default function MaintenanceDashboardPage() {
         {assignedIssues.length === 0 ? (
           <p className="text-center text-sm text-slate-600">No issues assigned yet.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {assignedIssues
               .sort((a, b) => {
                 const statusOrder = { assigned: 0, in_progress: 1, resolved: 2 };
                 return statusOrder[a.status] - statusOrder[b.status];
               })
               .map((issue) => (
-                <div key={issue.id} className="flex flex-col gap-2 border-l-4 border-amber-300 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-slate-900">{issue.title}</h3>
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusColor(issue.status)}`}>
-                        {ISSUE_STATUS.find((s) => s.value === issue.status)?.label}
-                      </span>
+                <div
+                  key={issue.id}
+                  className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 transition hover:shadow-lg hover:border-slate-300"
+                >
+                  {issue.imageUrl ? (
+                    <a
+                      href={issue.imageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mb-3 block overflow-hidden rounded-lg border border-slate-200"
+                      title="Open uploaded photo"
+                    >
+                      <img
+                        src={issue.imageUrl}
+                        alt={`Issue ${issue.id} preview`}
+                        className="h-40 w-full object-cover"
+                        loading="lazy"
+                      />
+                    </a>
+                  ) : null}
+
+                  {/* Card Header */}
+                  <div className="mb-3">
+                    <h3 className="line-clamp-2 font-semibold text-slate-900">{issue.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-600">{issue.description}</p>
+                  </div>
+
+                  {/* Badges */}
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusColor(issue.status)}`}>
+                      {ISSUE_STATUS.find((s) => s.value === issue.status)?.label}
+                    </span>
+                    {issue.status !== 'resolved' && (
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getPriorityColor(issue.priority)}`}>
                         {ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.label}
                       </span>
-                    </div>
-                    <p className="mt-1 text-sm text-slate-600">{issue.description.substring(0, 150)}...</p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      ID: {issue.id} | Location: {issue.location} | From: {issue.studentName}
+                    )}
+                  </div>
+
+                  {/* Meta Info */}
+                  <div className="mb-4 space-y-1 border-t border-slate-100 pt-3">
+                    <p className="text-xs text-slate-600">
+                      <span className="font-medium text-slate-700">Issue ID:</span> {issue.id}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      <span className="font-medium text-slate-700">Location:</span> {issue.location}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      <span className="font-medium text-slate-700">Reporter:</span> {issue.studentName}
                     </p>
                   </div>
+
+                  {/* Action Button */}
                   <button
                     onClick={() => navigate(`/maintenance/issue/${issue.id}`)}
-                    className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 sm:mt-0"
+                    className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
                   >
                     View & Update
                   </button>

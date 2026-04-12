@@ -16,6 +16,8 @@ import {
   Users,
   FolderOpen,
   ArrowLeft,
+  Search,
+  Menu,
 } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import AlertMessage from '../../components/auth/AlertMessage';
@@ -41,6 +43,8 @@ export default function AdminSettingsPage() {
   const [savedSettings, setSavedSettings] = useState(getDefaultSettings());
   const [settings, setSettingsState] = useState(getDefaultSettings());
   const [loadingSettings, setLoadingSettings] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [tabSearch, setTabSearch] = useState('');
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -572,13 +576,13 @@ export default function AdminSettingsPage() {
   };
 
   const tabs = [
-    { id: 'categories', label: 'Categories', icon: FolderOpen },
-    { id: 'sla', label: 'SLA Config', icon: Clock },
-    { id: 'staff', label: 'Staff Rules', icon: Users },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'campusInfo', label: 'Campus Info', icon: Zap },
-    { id: 'security', label: 'Security', icon: Lock },
-    { id: 'system', label: 'System', icon: Database },
+    { id: 'categories', label: 'Categories', icon: FolderOpen, description: 'Manage issue types and defaults' },
+    { id: 'sla', label: 'SLA Config', icon: Clock, description: 'Response and escalation timings' },
+    { id: 'staff', label: 'Staff Rules', icon: Users, description: 'Workload and assignment policies' },
+    { id: 'notifications', label: 'Notifications', icon: Bell, description: 'Alert and summary preferences' },
+    { id: 'campusInfo', label: 'Campus Info', icon: Zap, description: 'Institution branding and contacts' },
+    { id: 'security', label: 'Security', icon: Lock, description: 'Login and account protection' },
+    { id: 'system', label: 'System', icon: Database, description: 'Retention and pagination controls' },
   ];
 
   const tabRenderers = {
@@ -595,6 +599,13 @@ export default function AdminSettingsPage() {
     activeTab !== 'categories' &&
     JSON.stringify(settings[activeTab] || {}) !== JSON.stringify(savedSettings[activeTab] || {});
 
+  const activeTabConfig = tabs.find((tab) => tab.id === activeTab);
+  const filteredTabs = tabs.filter((tab) => {
+    const q = tabSearch.trim().toLowerCase();
+    if (!q) return true;
+    return tab.label.toLowerCase().includes(q) || tab.description.toLowerCase().includes(q);
+  });
+
   if (loadingSettings) {
     return (
       <DashboardShell title="Settings" subtitle="Configure system, categories, staff, and notifications" roleLabel="Admin">
@@ -608,7 +619,7 @@ export default function AdminSettingsPage() {
       <>
         <button
           onClick={() => navigate('/dashboard/admin')}
-          className="mb-6 inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          className="mb-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:mb-6 sm:w-auto"
         >
           <ArrowLeft size={16} className="text-primary" />
           Back to Dashboard
@@ -616,70 +627,187 @@ export default function AdminSettingsPage() {
 
         <AlertMessage type={messageType} message={message} />
 
-        <div className="mb-6 border-b border-slate-200 pb-4">
-          <h2 className="text-3xl font-semibold text-slate-900">Settings</h2>
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">System Settings</h2>
+              <p className="mt-1 text-sm text-slate-600">Configure platform behavior, notifications, security, and category policies.</p>
+            </div>
+            <div className="hidden sm:inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+              Admin Configuration Panel
+            </div>
+          </div>
         </div>
 
-        <div className="settings-page flex gap-6">
+        <div className="settings-page grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           {/* Sidebar */}
-          <div className="hidden w-56 flex-shrink-0 lg:block">
-            <nav className="space-y-1 rounded-lg border border-slate-200 bg-white p-3">
-              <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Account</p>
-              {tabs.map((tab) => {
+          <aside className="hidden lg:block">
+            <nav className="sticky top-24 space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Search size={14} />
+                  <input
+                    value={tabSearch}
+                    onChange={(e) => setTabSearch(e.target.value)}
+                    placeholder="Find a setting"
+                    className="w-full border-none bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+              <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Settings Sections</p>
+              {filteredTabs.map((tab) => {
                 const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                const isDirty =
+                  tab.id !== 'categories' &&
+                  JSON.stringify(settings[tab.id] || {}) !== JSON.stringify(savedSettings[tab.id] || {});
+
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                      activeTab === tab.id
-                        ? 'bg-slate-100 text-slate-900'
-                        : 'text-slate-600 hover:bg-slate-50'
+                    className={`w-full rounded-xl px-3 py-3 text-left transition ${
+                      isActive
+                        ? 'border border-blue-200 bg-blue-50 text-slate-900'
+                        : 'border border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <Icon size={16} />
-                    <span>{tab.label}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Icon size={16} className={isActive ? 'text-blue-700' : ''} />
+                        <span className="text-sm font-semibold">{tab.label}</span>
+                      </div>
+                      {isDirty ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                          Unsaved
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{tab.description}</p>
                   </button>
                 );
               })}
+              {filteredTabs.length === 0 && (
+                <p className="px-3 py-2 text-xs text-slate-500">No matching settings found.</p>
+              )}
             </nav>
+          </aside>
+
+          {/* Mobile Toolbar */}
+          <div className="w-full lg:hidden">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMobileNavOpen(true)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700"
+                  title="Open settings menu"
+                >
+                  <Menu size={18} />
+                </button>
+                <div className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <Search size={14} />
+                    <input
+                      value={tabSearch}
+                      onChange={(e) => setTabSearch(e.target.value)}
+                      placeholder="Find a setting"
+                      className="w-full border-none bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">Current section: <span className="font-semibold text-slate-700">{activeTabConfig?.label}</span></p>
+            </div>
           </div>
 
-          {/* Mobile Tab Selector */}
-          <div className="w-full lg:hidden mb-4">
-            <select
-              value={activeTab}
-              onChange={(e) => setActiveTab(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
-            >
-              {tabs.map((tab) => (
-                <option key={tab.id} value={tab.id}>{tab.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Main Content */}
-          <div className="flex-1">
-            <div className="rounded-lg border border-slate-200 bg-white p-6">
-              {activeTab !== 'categories' && (
-                <div className="mb-5 flex items-center justify-end gap-2 border-b border-slate-200 pb-4">
+          {/* Mobile Sidebar Drawer */}
+          {mobileNavOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden">
+              <div
+                className="absolute inset-0 bg-slate-900/40"
+                onClick={() => setMobileNavOpen(false)}
+              />
+              <aside className="absolute left-0 top-0 h-full w-[82%] max-w-xs border-r border-slate-200 bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+                  <p className="text-sm font-bold text-slate-900">Settings Menu</p>
                   <button
-                    onClick={() => handleResetSettings(activeTab)}
-                    disabled={!isCurrentSectionDirty}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => setMobileNavOpen(false)}
+                    className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100"
                   >
-                    Reset
-                  </button>
-                  <button
-                    onClick={() => handleSaveSettings(activeTab, settings[activeTab] || {})}
-                    disabled={!isCurrentSectionDirty}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Save size={16} />
-                    Save
+                    <X size={18} />
                   </button>
                 </div>
-              )}
+
+                <div className="space-y-2 p-3">
+                  {filteredTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          setActiveTab(tab.id);
+                          setMobileNavOpen(false);
+                        }}
+                        className={`w-full rounded-xl px-3 py-3 text-left transition ${
+                          isActive
+                            ? 'border border-blue-200 bg-blue-50 text-slate-900'
+                            : 'border border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon size={16} className={isActive ? 'text-blue-700' : ''} />
+                          <span className="text-sm font-semibold">{tab.label}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">{tab.description}</p>
+                      </button>
+                    );
+                  })}
+                  {filteredTabs.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-slate-500">No matching settings found.</p>
+                  )}
+                </div>
+              </aside>
+            </div>
+          )}
+
+          {/* Main Content */}
+          <div className="min-w-0 pb-24 sm:pb-0">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+              <div className="mb-5 flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 sm:text-xl">{activeTabConfig?.label || 'Settings'}</h3>
+                  <p className="mt-1 text-sm text-slate-600">{activeTabConfig?.description || 'Manage configuration values for this section.'}</p>
+                </div>
+
+                {activeTab !== 'categories' && (
+                  <div className="hidden items-center gap-2 sm:flex">
+                    {isCurrentSectionDirty ? (
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Unsaved changes</span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Saved</span>
+                    )}
+
+                    <button
+                      onClick={() => handleResetSettings(activeTab)}
+                      disabled={!isCurrentSectionDirty}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Reset
+                    </button>
+
+                    <button
+                      onClick={() => handleSaveSettings(activeTab, settings[activeTab] || {})}
+                      disabled={!isCurrentSectionDirty}
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Save size={16} />
+                      Save
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {tabRenderers[activeTab]?.()}
             </div>
           </div>
@@ -688,7 +816,7 @@ export default function AdminSettingsPage() {
         {/* Category Modal */}
         {showCategoryModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg bg-white p-4 shadow-lg sm:p-6">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">
                   {editingCategory ? 'Edit Category' : 'Add New Category'}
@@ -772,7 +900,7 @@ export default function AdminSettingsPage() {
         {/* Delete Confirmation Modal */}
         {showDeleteModal && deleteTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+            <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-lg sm:p-6">
               <div className="mb-4 flex items-center gap-3">
                 <AlertCircle size={24} className="text-red-600" />
                 <h3 className="text-lg font-semibold text-slate-900">Delete Category?</h3>
@@ -794,6 +922,27 @@ export default function AdminSettingsPage() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab !== 'categories' && (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:hidden">
+            <div className="mx-auto flex w-full max-w-7xl items-center gap-2">
+              <button
+                onClick={() => handleResetSettings(activeTab)}
+                disabled={!isCurrentSectionDirty}
+                className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => handleSaveSettings(activeTab, settings[activeTab] || {})}
+                disabled={!isCurrentSectionDirty}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         )}

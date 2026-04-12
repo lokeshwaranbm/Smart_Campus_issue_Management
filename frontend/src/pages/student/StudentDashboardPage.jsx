@@ -1,13 +1,12 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ClipboardList, Plus, AlertCircle, Clock, CheckCircle2, Eye, Newspaper, Info, MessageCircle, Heart, MapPin } from 'lucide-react';
+import { ClipboardList, Plus, AlertCircle, Clock, CheckCircle2, Eye, Newspaper, Info } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import StatsCard from '../../components/dashboard/StatsCard';
 import IssueCard from '../../components/student/IssueCard';
 import FloatingActionButton from '../../components/student/FloatingActionButton';
 import { getAuthSession } from '../../utils/auth';
-import { getIssuesByStudent, getPublicIssueFeed, addSupport, removeSupport } from '../../utils/issues';
-import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
+import { getIssuesByStudent, getPublicIssueFeed, addSupport } from '../../utils/issues';
 
 export default function StudentDashboardPage() {
   const location = useLocation();
@@ -43,16 +42,6 @@ export default function StudentDashboardPage() {
   };
 
   const issueSupportedByUser = (issue) => issue.supportedBy?.includes(session?.email) ?? false;
-
-  const getPriorityColor = (priority) => {
-    const p = ISSUE_PRIORITIES.find((x) => x.value === priority);
-    return p?.color || '';
-  };
-
-  const getStatusColor = (status) => {
-    const s = ISSUE_STATUS.find((x) => x.value === status);
-    return s?.color || '';
-  };
 
   return (
     <DashboardShell title="Student Portal" subtitle="Track issues, collaborate with community" roleLabel="Student">
@@ -127,6 +116,11 @@ export default function StudentDashboardPage() {
       {/* My Reports Tab */}
       {activeTab === 'myReports' && (
         <div className="space-y-4">
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800 flex items-start gap-2">
+            <Info size={16} className="mt-0.5 flex-shrink-0" />
+            <span>Your reported issues displayed in the same card view as Campus Feed</span>
+          </div>
+
           {studentIssues.length === 0 ? (
             <div className="rounded-card border border-slate-200 bg-white p-8 text-center shadow-card">
               <ClipboardList size={48} className="mx-auto mb-3 text-slate-400" />
@@ -140,54 +134,16 @@ export default function StudentDashboardPage() {
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {studentIssues
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
                 .map((issue) => (
-                  <div
+                  <IssueCard
                     key={issue.id}
-                    className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
-                  >
-                    <div className="flex flex-col gap-3 border-l-4 border-blue-300 p-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold text-slate-900 truncate">{issue.title}</h3>
-                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${getStatusColor(issue.status)}`}>
-                            {ISSUE_STATUS.find((s) => s.value === issue.status)?.label}
-                          </span>
-                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${getPriorityColor(issue.priority)}`}>
-                            {issue.priority?.charAt(0).toUpperCase() + issue.priority?.slice(1)} Priority
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm text-slate-600 line-clamp-2">{issue.description}</p>
-                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-                          <span>ID: {issue.id}</span>
-                          <div className="flex items-center gap-1">
-                            <MapPin size={12} />
-                            {issue.location}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <AlertCircle size={12} />
-                            {issue.category}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Heart size={12} />
-                            {issue.supports || 0} supports
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <MessageCircle size={12} />
-                            {(issue.comments || []).length} comments
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => navigate(`/student/issue/${issue.id}`)}
-                        className="mt-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary transition hover:bg-blue-50 sm:mt-0 whitespace-nowrap"
-                      >
-                        View Details
-                      </button>
-                    </div>
-                  </div>
+                    issue={issue}
+                    onSupport={handleSupport}
+                    isSupported={issueSupportedByUser(issue)}
+                  />
                 ))}
             </div>
           )}

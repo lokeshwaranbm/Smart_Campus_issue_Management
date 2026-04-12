@@ -239,10 +239,8 @@ export const getStaffById = async (staffId) => {
  */
 export const createStaff = async (staffData, createdByAdminId) => {
   try {
-    const { name, email, phone, employeeId, department, assignedCategories, slaOverride, password, role } =
+    const { name, email, phone, employeeId, department, assignedCategories, slaOverride, password } =
       staffData;
-
-    const normalizedRole = role === 'contractor' ? 'contractor' : 'staff';
 
     const normalizedAssignedCategories = await normalizeAssignedCategories(assignedCategories);
 
@@ -264,7 +262,7 @@ export const createStaff = async (staffData, createdByAdminId) => {
       assignedCategories: normalizedAssignedCategories,
       slaOverride,
       password: staffPassword,
-      role: normalizedRole,
+      role: 'staff',
       isActive: true,
       ...(createdByAdminId ? { createdBy: createdByAdminId } : {}),
     });

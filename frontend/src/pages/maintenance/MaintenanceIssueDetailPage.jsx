@@ -4,13 +4,7 @@ import { ArrowLeft, Send, CheckCircle2, MapPin, ExternalLink } from 'lucide-reac
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import SelectField from '../../components/auth/SelectField';
 import AlertMessage from '../../components/auth/AlertMessage';
-import {
-  getIssueById,
-  updateIssueStatus,
-  addIssueRemark,
-  getContractorHistory,
-  assignContractorManually,
-} from '../../utils/issues';
+import { getIssueById, updateIssueStatus, addIssueRemark } from '../../utils/issues';
 import { getAuthSession } from '../../utils/auth';
 import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
 import {
@@ -30,17 +24,6 @@ export default function MaintenanceIssueDetailPage() {
   const [newStatus, setNewStatus] = useState('');
   const [remark, setRemark] = useState('');
   const [message, setMessage] = useState('');
-  const [submittingContractor, setSubmittingContractor] = useState(false);
-  const [contractorSuggestions, setContractorSuggestions] = useState([]);
-  const [contractorForm, setContractorForm] = useState({
-    contractorName: '',
-    companyName: '',
-    phone: '',
-    email: '',
-    estimatedCost: '',
-    expectedCompletionDate: '',
-    remarks: '',
-  });
 
   const loadIssue = () => {
     setLoading(true);
@@ -53,89 +36,9 @@ export default function MaintenanceIssueDetailPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadIssue(); }, [issueId]);
-
   useEffect(() => {
-    const query = contractorForm.contractorName.trim();
-    if (!query) {
-      setContractorSuggestions([]);
-      return;
-    }
-
-    let isMounted = true;
-    const timeout = setTimeout(async () => {
-      try {
-        const result = await getContractorHistory(query);
-        if (isMounted) {
-          setContractorSuggestions(result?.data || []);
-        }
-      } catch {
-        if (isMounted) setContractorSuggestions([]);
-      }
-    }, 250);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeout);
-    };
-  }, [contractorForm.contractorName]);
-
-  const handleContractorFieldChange = (event) => {
-    const { name, value } = event.target;
-    setContractorForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const applySuggestion = (suggestion) => {
-    setContractorForm((prev) => ({
-      ...prev,
-      contractorName: suggestion.contractorName || prev.contractorName,
-      companyName: suggestion.companyName || prev.companyName,
-      phone: suggestion.phone || prev.phone,
-      email: suggestion.email || prev.email,
-    }));
-  };
-
-  const handleContractorAssignment = async () => {
-    const required = [
-      contractorForm.contractorName,
-      contractorForm.phone,
-      contractorForm.email,
-    ].every((value) => String(value || '').trim());
-
-    if (!required) {
-      setMessage('Contractor name, phone, and email are required.');
-      return;
-    }
-
-    try {
-      setSubmittingContractor(true);
-      await assignContractorManually(issueId, {
-        assignedBy: session?.email,
-        contractorName: contractorForm.contractorName,
-        companyName: contractorForm.companyName,
-        phone: contractorForm.phone,
-        email: contractorForm.email,
-        estimatedCost: contractorForm.estimatedCost,
-        expectedCompletionDate: contractorForm.expectedCompletionDate,
-        remarks: contractorForm.remarks,
-      });
-      setMessage('Issue assigned to contractor successfully.');
-      setContractorForm({
-        contractorName: '',
-        companyName: '',
-        phone: '',
-        email: '',
-        estimatedCost: '',
-        expectedCompletionDate: '',
-        remarks: '',
-      });
-      await loadIssue();
-    } catch (error) {
-      setMessage(error.message || 'Failed to assign contractor.');
-    } finally {
-      setSubmittingContractor(false);
-    }
-  };
+    loadIssue();
+  }, [issueId]);
 
   if (loading) {
     return (
@@ -186,6 +89,7 @@ export default function MaintenanceIssueDetailPage() {
 
   const priorityColor = ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.color || '';
   const statusLabel = ISSUE_STATUS.find((s) => s.value === issue.status)?.label || issue.status;
+  const showPriority = issue.status !== 'resolved';
   const coordinates = parseLocationCoordinates(issue.location);
   const mapUrl = coordinates ? getLocationMapUrl(coordinates.latitude, coordinates.longitude) : '';
   const mapEmbedUrl = coordinates ? getLocationEmbedUrl(coordinates.latitude, coordinates.longitude) : '';
@@ -217,6 +121,27 @@ export default function MaintenanceIssueDetailPage() {
                 <p className="text-xs font-medium uppercase text-slate-500">Description</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{issue.description}</p>
               </div>
+
+              {issue.imageUrl && (
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">Uploaded Photo</p>
+                  <a
+                    href={issue.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 block overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition hover:border-blue-300"
+                    title="Open full image"
+                  >
+                    <img
+                      src={issue.imageUrl}
+                      alt={`Issue ${issue.id} uploaded evidence`}
+                      className="h-56 w-full object-cover"
+                      loading="lazy"
+                    />
+                  </a>
+                  <p className="mt-2 text-xs text-slate-500">Click the image to open full size.</p>
+                </div>
+              )}
 
               <div>
                 <p className="text-xs font-medium uppercase text-slate-500">Location</p>
@@ -321,114 +246,14 @@ export default function MaintenanceIssueDetailPage() {
                 </p>
               </div>
 
-              <div>
-
-                {issue.assignedToType === 'contractor' ? (
-                  <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-                    <p className="text-xs font-medium uppercase text-indigo-600">Assigned Contractor</p>
-                    <p className="mt-1 text-sm font-semibold text-indigo-900">{issue.contractorName || issue.assignedToName}</p>
-                    {issue.contractorCompanyName ? <p className="text-xs text-indigo-700">{issue.contractorCompanyName}</p> : null}
-                    {issue.contractorEmail ? <p className="text-xs text-indigo-700">{issue.contractorEmail}</p> : null}
-                  </div>
-                ) : null}
-                <p className="text-xs font-medium uppercase text-slate-500">Priority</p>
-                <p className={`mt-1 inline-block rounded-full px-3 py-1 text-sm font-semibold ${priorityColor}`}>
-
-            <div className="rounded-card border border-slate-200 bg-white p-6 shadow-card">
-              <h2 className="mb-4 font-semibold text-slate-900">Assign Contractor</h2>
-
-              <div className="space-y-3">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">Issue ID</p>
-                  <p className="text-sm font-semibold text-slate-900">{issue.id}</p>
-                  <p className="mt-2 text-xs text-slate-500">Issue Title</p>
-                  <p className="text-sm text-slate-900">{issue.title}</p>
-                  <p className="mt-2 text-xs text-slate-500">Category</p>
-                  <p className="text-sm text-slate-900">{issue.category}</p>
-                </div>
-
+              {showPriority && (
                 <div>
-                  <label className="input-label" htmlFor="contractorName">Contractor Name</label>
-                  <input
-                    id="contractorName"
-                    name="contractorName"
-                    value={contractorForm.contractorName}
-                    onChange={handleContractorFieldChange}
-                    className="input-field"
-                    placeholder="Enter contractor name"
-                  />
-                  {contractorSuggestions.length ? (
-                    <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2">
-                      {contractorSuggestions.map((suggestion) => (
-                        <button
-                          key={`${suggestion.contractorName}-${suggestion.email || 'na'}`}
-                          type="button"
-                          onClick={() => applySuggestion(suggestion)}
-                          className="block w-full rounded px-2 py-1 text-left text-sm text-slate-700 hover:bg-slate-100"
-                        >
-                          {suggestion.contractorName}
-                          {suggestion.companyName ? ` - ${suggestion.companyName}` : ''}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
+                  <p className="text-xs font-medium uppercase text-slate-500">Priority</p>
+                  <p className={`mt-1 inline-block rounded-full px-3 py-1 text-sm font-semibold ${priorityColor}`}>
+                    {ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.label}
+                  </p>
                 </div>
-
-                <input
-                  name="companyName"
-                  value={contractorForm.companyName}
-                  onChange={handleContractorFieldChange}
-                  className="input-field"
-                  placeholder="Company Name"
-                />
-                <input
-                  name="phone"
-                  value={contractorForm.phone}
-                  onChange={handleContractorFieldChange}
-                  className="input-field"
-                  placeholder="Phone Number"
-                />
-                <input
-                  name="email"
-                  value={contractorForm.email}
-                  onChange={handleContractorFieldChange}
-                  className="input-field"
-                  placeholder="Email"
-                  type="email"
-                />
-                <input
-                  name="estimatedCost"
-                  value={contractorForm.estimatedCost}
-                  onChange={handleContractorFieldChange}
-                  className="input-field"
-                  placeholder="Estimated Cost"
-                  type="number"
-                  min="0"
-                />
-                <input
-                  name="expectedCompletionDate"
-                  value={contractorForm.expectedCompletionDate}
-                  onChange={handleContractorFieldChange}
-                  className="input-field"
-                  type="date"
-                />
-                <textarea
-                  name="remarks"
-                  value={contractorForm.remarks}
-                  onChange={handleContractorFieldChange}
-                  className="input-field"
-                  rows={3}
-                  placeholder="Remarks"
-                />
-
-                <button onClick={handleContractorAssignment} disabled={submittingContractor} className="primary-button disabled:opacity-60">
-                  {submittingContractor ? 'Assigning...' : 'Assign Contractor'}
-                </button>
-              </div>
-            </div>
-                  {ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.label}
-                </p>
-              </div>
+              )}
 
               <div>
                 <p className="text-xs font-medium uppercase text-slate-500">Assigned Since</p>

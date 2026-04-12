@@ -85,7 +85,6 @@ export default function AdminIssuesListPage() {
     const grouped = {
       submitted: [],
       assigned: [],
-      contractor_assigned: [],
       in_progress: [],
       resolved: [],
     };
@@ -222,9 +221,11 @@ export default function AdminIssuesListPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${getPriorityColor(priority)}`}>
-                          {ISSUE_PRIORITIES.find((p) => p.value === priority)?.label || 'Medium'}
-                        </span>
+                        {issue?.status !== 'resolved' && (
+                          <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${getPriorityColor(priority)}`}>
+                            {ISSUE_PRIORITIES.find((p) => p.value === priority)?.label || 'Medium'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <button
@@ -312,9 +313,11 @@ export default function AdminIssuesListPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getPriorityColor(issue.priority)}`}>
-                      {ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.label}
-                    </span>
+                    {issue.status !== 'resolved' && (
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getPriorityColor(issue.priority)}`}>
+                        {ISSUE_PRIORITIES.find((p) => p.value === issue.priority)?.label}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">

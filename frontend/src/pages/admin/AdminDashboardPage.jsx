@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Clock, CheckCircle2, Building2, BarChart3, TrendingUp, User, ArrowRight, X } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import StatsCard from '../../components/dashboard/StatsCard';
-import { getIssues, getIssueStats, getCategoryStats, getDepartmentStats } from '../../utils/issues';
+import { getIssues, getCategoryStats, getDepartmentStats } from '../../utils/issues';
 import { getPendingMaintenanceStaff } from '../../utils/auth';
 import { getActiveNotifications, dismissNotification } from '../../utils/notifications';
 import { ISSUE_STATUS, ISSUE_CATEGORIES, DEPARTMENTS } from '../../constants/issues';
@@ -164,16 +164,25 @@ function AnalyticsGrid({ issues }) {
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const [issues, setIssues] = useState([]);
-  const [stats, setStats] = useState({ total: 0, submitted: 0, assigned: 0, inProgress: 0, resolved: 0 });
   const [pendingStaff, setPendingStaff] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     getIssues().then(setIssues).catch(() => setIssues([]));
-    getIssueStats().then(setStats).catch(() => {});
     setNotifications(getActiveNotifications());
     getPendingMaintenanceStaff().then(setPendingStaff).catch(() => setPendingStaff([]));
   }, []);
+
+  const stats = useMemo(
+    () => ({
+      total: issues.length,
+      submitted: issues.filter((issue) => issue.status === 'submitted').length,
+      assigned: issues.filter((issue) => issue.status === 'assigned').length,
+      inProgress: issues.filter((issue) => issue.status === 'in_progress').length,
+      resolved: issues.filter((issue) => issue.status === 'resolved').length,
+    }),
+    [issues]
+  );
 
   const handleDismissNotification = (notificationId) => {
     dismissNotification(notificationId);
@@ -276,7 +285,24 @@ export default function AdminDashboardPage() {
                     key={issue.id}
                     className="flex flex-col gap-2 border-l-4 border-blue-300 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="flex-1">
+                    <div className="flex items-start gap-3 flex-1">
+                      {issue.imageUrl ? (
+                        <a
+                          href={issue.imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="hidden sm:block overflow-hidden rounded-md border border-slate-200"
+                          title="Open uploaded photo"
+                        >
+                          <img
+                            src={issue.imageUrl}
+                            alt={`Issue ${issue.id} preview`}
+                            className="h-14 w-20 object-cover"
+                            loading="lazy"
+                          />
+                        </a>
+                      ) : null}
+                      <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <h4 className="font-semibold text-slate-900">{issue.title}</h4>
                         <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${getStatusBadgeClass(issue.status)}`}>
@@ -286,6 +312,17 @@ export default function AdminDashboardPage() {
                       <p className="mt-1 text-xs text-slate-500">
                         {issue.studentName} | {issue.location} | {issue.category}
                       </p>
+                      {issue.imageUrl ? (
+                        <a
+                          href={issue.imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex text-xs font-semibold text-primary hover:underline sm:hidden"
+                        >
+                          View Photo
+                        </a>
+                      ) : null}
+                      </div>
                     </div>
                     <button
                       onClick={() => navigate(`/admin/issues/${issue.id}`)}

@@ -35,8 +35,6 @@ const DepartmentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-DepartmentSchema.index({ name: 1 }, { unique: true });
-DepartmentSchema.index({ code: 1 }, { unique: true });
 DepartmentSchema.index({ isActive: 1, name: 1 });
 
 export const Department = mongoose.model('Department', DepartmentSchema);
