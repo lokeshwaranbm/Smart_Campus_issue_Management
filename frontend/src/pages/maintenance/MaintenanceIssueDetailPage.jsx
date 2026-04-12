@@ -168,7 +168,9 @@ export default function MaintenanceIssueDetailPage() {
               </div>
 
               {issue.imageUrl && (
-                <dibutton
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">Uploaded Photo</p>
+                  <button
                     onClick={() => { setImageModalOpen(true); setImageLoadError(false); }}
                     className="mt-2 block w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition hover:border-blue-300 hover:shadow-md"
                     type="button"
@@ -181,9 +183,7 @@ export default function MaintenanceIssueDetailPage() {
                       onError={() => setImageLoadError(true)}
                     />
                   </button>
-                  <p className="mt-2 text-xs text-slate-500">Click image to view
-                  </a>
-                  <p className="mt-2 text-xs text-slate-500">Click the image to open full size.</p>
+                  <p className="mt-2 text-xs text-slate-500">Click image to view full size.</p>
                 </div>
               )}
 
