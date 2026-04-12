@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, CheckCircle2, MapPin, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Send, CheckCircle2, MapPin, ExternalLink, X, Download } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import SelectField from '../../components/auth/SelectField';
 import AlertMessage from '../../components/auth/AlertMessage';
@@ -24,6 +24,8 @@ export default function MaintenanceIssueDetailPage() {
   const [newStatus, setNewStatus] = useState('');
   const [remark, setRemark] = useState('');
   const [message, setMessage] = useState('');
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
 
   const loadIssue = () => {
     setLoading(true);
@@ -106,6 +108,49 @@ export default function MaintenanceIssueDetailPage() {
 
       <AlertMessage message={message} />
 
+      {/* Image Modal Viewer */}
+      {imageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setImageModalOpen(false)}>
+          <div className="relative max-h-[90vh] max-w-2xl w-full rounded-lg bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <h3 className="text-sm font-semibold text-slate-900">Image Viewer</h3>
+              <button onClick={() => setImageModalOpen(false)} className="rounded-lg p-1 text-slate-600 hover:bg-slate-200">
+                <X size={20} />
+              </button>
+            </div>
+            {/* Image Container */}
+            <div className="flex items-center justify-center bg-slate-900 px-4 py-6">
+              {imageLoadError ? (
+                <div className="text-center">
+                  <p className="text-sm text-slate-300 mb-2">Image failed to load</p>
+                  <a
+                    href={issue.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    <Download size={16} />
+                    Download instead
+                  </a>
+                </div>
+              ) : (
+                <img
+                  src={issue.imageUrl}
+                  alt={`Issue ${issue.id} full view`}
+                  className="max-h-[75vh] max-w-full object-contain"
+                  onError={() => setImageLoadError(true)}
+                />
+              )}
+            </div>
+            {/* Footer */}
+            <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-center">
+              <p className="text-xs text-slate-600">Issue: {issue.id}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
           <div className="rounded-card border border-slate-200 bg-white p-6 shadow-card">
@@ -123,21 +168,20 @@ export default function MaintenanceIssueDetailPage() {
               </div>
 
               {issue.imageUrl && (
-                <div>
-                  <p className="text-xs font-medium uppercase text-slate-500">Uploaded Photo</p>
-                  <a
-                    href={issue.imageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 block overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition hover:border-blue-300"
-                    title="Open full image"
+                <dibutton
+                    onClick={() => { setImageModalOpen(true); setImageLoadError(false); }}
+                    className="mt-2 block w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition hover:border-blue-300 hover:shadow-md"
+                    type="button"
                   >
                     <img
                       src={issue.imageUrl}
                       alt={`Issue ${issue.id} uploaded evidence`}
                       className="h-56 w-full object-cover"
                       loading="lazy"
+                      onError={() => setImageLoadError(true)}
                     />
+                  </button>
+                  <p className="mt-2 text-xs text-slate-500">Click image to view
                   </a>
                   <p className="mt-2 text-xs text-slate-500">Click the image to open full size.</p>
                 </div>
