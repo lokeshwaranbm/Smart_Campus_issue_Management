@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { clearAuthSession, getAuthSession } from '../../utils/auth';
+import { clearAuthSession, getAuthSession, logoutUser } from '../../utils/auth';
 import UserAccountDropdown from './UserAccountDropdown';
 import { 
   LayoutDashboard, 
@@ -47,8 +47,8 @@ export default function DashboardShell({ title, subtitle, roleLabel, children })
     return '/login';
   };
 
-  const handleLogout = () => {
-    clearAuthSession();
+  const handleLogout = async () => {
+    await logoutUser();
     navigate('/login');
   };
 

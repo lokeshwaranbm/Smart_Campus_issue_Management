@@ -213,9 +213,9 @@ export default function ReportIssuePage() {
                     {formatLocationCoordinates(formData.latitude, formData.longitude)}
                   </p>
                   {locationAccuracy !== null && (
-                    <p className={`mt-1 text-xs ${locationAccuracy > 100 ? 'text-amber-700' : 'text-blue-700'}`}>
+                    <p className={`mt-1 text-xs ${locationAccuracy > 200 ? 'text-amber-700' : 'text-blue-700'}`}>
                       Accuracy: {Math.round(locationAccuracy)} meters
-                      {locationAccuracy > 100 ? ' (low - move near a window/open area and tap Re-detect)' : ''}
+                      {locationAccuracy > 200 ? ' (low - move near a window/open area and tap Re-detect)' : ''}
                     </p>
                   )}
                   <p className="text-xs text-blue-600 mt-1">

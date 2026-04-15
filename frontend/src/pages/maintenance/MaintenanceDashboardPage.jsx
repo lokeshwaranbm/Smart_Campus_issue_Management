@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import StatsCard from '../../components/dashboard/StatsCard';
+import ImageViewerModal from '../../components/common/ImageViewerModal';
 import { getAuthSession } from '../../utils/auth';
 import { getIssues } from '../../utils/issues';
 import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
@@ -11,9 +12,18 @@ export default function MaintenanceDashboardPage() {
   const navigate = useNavigate();
   const session = getAuthSession();
   const [allIssues, setAllIssues] = useState([]);
+  const [previewIssue, setPreviewIssue] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    getIssues().then(setAllIssues).catch(() => setAllIssues([]));
+    setLoadError('');
+
+    getIssues()
+      .then(setAllIssues)
+      .catch((error) => {
+        setAllIssues([]);
+        setLoadError(error?.message || 'Unable to load assigned issues.');
+      });
   }, []);
 
   const assignedIssues = useMemo(() => {
@@ -53,6 +63,25 @@ export default function MaintenanceDashboardPage() {
         <StatsCard label="Resolved" value={stats.resolved} icon={<CheckCircle2 size={16} />} tone="emerald" />
       </div>
 
+      <ImageViewerModal
+        open={Boolean(previewIssue?.imageUrl)}
+        imageUrl={previewIssue?.imageUrl}
+        title={previewIssue ? `Issue ${previewIssue.id} evidence` : 'Issue image'}
+        issueId={previewIssue?.id}
+        issueTitle={previewIssue?.title}
+        reporterName={previewIssue?.studentName}
+        reporterEmail={previewIssue?.studentEmail}
+        reportedAt={previewIssue?.createdAt}
+        attachment={null}
+        onClose={() => setPreviewIssue(null)}
+      />
+
+      {loadError && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          {loadError}
+        </div>
+      )}
+
       <div className="rounded-card border border-slate-200 bg-white p-6 shadow-card">
         <h2 className="mb-4 text-lg font-semibold text-slate-900">Work Queue</h2>
 
@@ -71,11 +100,10 @@ export default function MaintenanceDashboardPage() {
                   className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 transition hover:shadow-lg hover:border-slate-300"
                 >
                   {issue.imageUrl ? (
-                    <a
-                      href={issue.imageUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mb-3 block overflow-hidden rounded-lg border border-slate-200"
+                    <button
+                      type="button"
+                      onClick={() => setPreviewIssue(issue)}
+                      className="mb-3 block overflow-hidden rounded-lg border border-slate-200 text-left"
                       title="Open uploaded photo"
                     >
                       <img
@@ -84,7 +112,7 @@ export default function MaintenanceDashboardPage() {
                         className="h-40 w-full object-cover"
                         loading="lazy"
                       />
-                    </a>
+                    </button>
                   ) : null}
 
                   {/* Card Header */}

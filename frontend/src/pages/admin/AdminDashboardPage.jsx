@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Clock, CheckCircle2, Building2, BarChart3, TrendingUp, User, ArrowRight, X } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import StatsCard from '../../components/dashboard/StatsCard';
+import ImageViewerModal from '../../components/common/ImageViewerModal';
 import { getIssues, getCategoryStats, getDepartmentStats } from '../../utils/issues';
 import { getPendingMaintenanceStaff } from '../../utils/auth';
 import { getActiveNotifications, dismissNotification } from '../../utils/notifications';
@@ -166,11 +167,22 @@ export default function AdminDashboardPage() {
   const [issues, setIssues] = useState([]);
   const [pendingStaff, setPendingStaff] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [previewIssue, setPreviewIssue] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    getIssues().then(setIssues).catch(() => setIssues([]));
+    setLoadError('');
+
+    getIssues()
+      .then(setIssues)
+      .catch((error) => {
+        setIssues([]);
+        setLoadError(error?.message || 'Unable to load issue data.');
+      });
     setNotifications(getActiveNotifications());
-    getPendingMaintenanceStaff().then(setPendingStaff).catch(() => setPendingStaff([]));
+    getPendingMaintenanceStaff()
+      .then(setPendingStaff)
+      .catch(() => setPendingStaff([]));
   }, []);
 
   const stats = useMemo(
@@ -200,6 +212,25 @@ export default function AdminDashboardPage() {
       subtitle="Manage users, issues, and campus operations"
       roleLabel="Admin"
     >
+      <ImageViewerModal
+        open={Boolean(previewIssue?.imageUrl)}
+        imageUrl={previewIssue?.imageUrl}
+        title={previewIssue ? `Issue ${previewIssue.id} evidence` : 'Issue image'}
+        issueId={previewIssue?.id}
+        issueTitle={previewIssue?.title}
+        reporterName={previewIssue?.studentName}
+        reporterEmail={previewIssue?.studentEmail}
+        reportedAt={previewIssue?.createdAt}
+        attachment={null}
+        onClose={() => setPreviewIssue(null)}
+      />
+
+      {loadError && (
+        <div className="mb-6 rounded-card border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-card">
+          {loadError}
+        </div>
+      )}
+
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatsCard label="Total Issues" value={stats.total} icon={<Building2 size={16} />} tone="blue" />
         <StatsCard label="Pending" value={stats.submitted} icon={<AlertTriangle size={16} />} tone="amber" />
@@ -287,11 +318,10 @@ export default function AdminDashboardPage() {
                   >
                     <div className="flex items-start gap-3 flex-1">
                       {issue.imageUrl ? (
-                        <a
-                          href={issue.imageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="hidden sm:block overflow-hidden rounded-md border border-slate-200"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewIssue(issue)}
+                          className="hidden overflow-hidden rounded-md border border-slate-200 text-left sm:block"
                           title="Open uploaded photo"
                         >
                           <img
@@ -300,7 +330,7 @@ export default function AdminDashboardPage() {
                             className="h-14 w-20 object-cover"
                             loading="lazy"
                           />
-                        </a>
+                        </button>
                       ) : null}
                       <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -313,14 +343,13 @@ export default function AdminDashboardPage() {
                         {issue.studentName} | {issue.location} | {issue.category}
                       </p>
                       {issue.imageUrl ? (
-                        <a
-                          href={issue.imageUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewIssue(issue)}
                           className="mt-1 inline-flex text-xs font-semibold text-primary hover:underline sm:hidden"
                         >
                           View Photo
-                        </a>
+                        </button>
                       ) : null}
                       </div>
                     </div>

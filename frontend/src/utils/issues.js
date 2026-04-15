@@ -81,10 +81,10 @@ export const deleteIssue = async (issueId) => {
 };
 
 // Returns: updated issue object
-export const updateIssueStatus = async (issueId, newStatus, updatedBy = 'system') => {
+export const updateIssueStatus = async (issueId, newStatus, updatedBy = 'system', resolutionProof = null) => {
   const response = await apiFetch(`/api/issues/${issueId}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status: newStatus, updatedBy }),
+    body: JSON.stringify({ status: newStatus, updatedBy, resolutionProof }),
   });
   return parseResponse(response);
 };

@@ -68,7 +68,12 @@ export const loginUser = async ({ email, password }) => {
       };
     }
 
-    return { ok: true, user: result.data.user, redirectTo: result.data.redirectTo };
+    return {
+      ok: true,
+      user: result.data.user,
+      accessToken: result.data.accessToken,
+      redirectTo: result.data.redirectTo,
+    };
   } catch {
     return { ok: false, message: 'Unable to connect to backend. Please try again.' };
   }
@@ -80,12 +85,13 @@ export const resolveRoleRedirect = (role) => {
   return '/dashboard/admin';
 };
 
-export const setAuthSession = (user) => {
+export const setAuthSession = (user, accessToken = null) => {
   const payload = JSON.stringify({
     email: user.email,
     fullName: user.fullName,
     role: user.role,
     status: user.status,
+    accessToken: accessToken || null,
   });
 
   // Use tab-scoped storage so multiple accounts can stay logged in across tabs.
@@ -108,6 +114,21 @@ export const getAuthSession = () => {
 export const clearAuthSession = () => {
   sessionStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(SESSION_KEY);
+};
+
+export const getAccessToken = () => {
+  const session = getAuthSession();
+  return session?.accessToken || null;
+};
+
+export const logoutUser = async () => {
+  try {
+    await apiFetch('/api/auth/logout', { method: 'POST' });
+  } catch {
+    // no-op: client-side session cleanup still proceeds
+  } finally {
+    clearAuthSession();
+  }
 };
 
 export const getPendingMaintenanceStaff = async () => {

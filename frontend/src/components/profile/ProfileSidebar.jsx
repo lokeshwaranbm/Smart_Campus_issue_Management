@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User, LayoutDashboard, FileText, Settings, LogOut, Menu, X } from 'lucide-react';
-import { clearAuthSession } from '../../utils/auth';
+import { logoutUser } from '../../utils/auth';
 
 export default function ProfileSidebar({ userRole = 'student' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleLogout = () => {
-    clearAuthSession();
+  const handleLogout = async () => {
+    await logoutUser();
     navigate('/login');
   };
 

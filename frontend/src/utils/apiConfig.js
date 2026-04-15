@@ -38,13 +38,51 @@ export const apiFetch = (endpoint, options = {}) => {
     session = null;
   }
 
-  return fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(session?.role ? { 'x-user-role': session.role } : {}),
-      ...(session?.email ? { 'x-user-email': session.email } : {}),
-      ...options.headers,
-    },
+  const hasFormDataBody = typeof FormData !== 'undefined' && options?.body instanceof FormData;
+
+  const doFetch = (authToken) =>
+    fetch(url, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        ...(hasFormDataBody ? {} : { 'Content-Type': 'application/json' }),
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        ...options.headers,
+      },
+    });
+
+  const currentAccessToken = session?.accessToken || null;
+
+  return doFetch(currentAccessToken).then(async (response) => {
+    const isAuthEndpoint = endpoint.includes('/api/auth/login') || endpoint.includes('/api/auth/refresh');
+    if (response.status !== 401 || isAuthEndpoint) {
+      return response;
+    }
+
+    // Attempt one refresh token rotation using HttpOnly refresh cookie.
+    const refreshResponse = await fetch(getApiUrl('/api/auth/refresh'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!refreshResponse.ok) {
+      return response;
+    }
+
+    const refreshBody = await refreshResponse.json().catch(() => null);
+    const nextAccessToken = refreshBody?.data?.accessToken || null;
+    if (!nextAccessToken || !session) {
+      return response;
+    }
+
+    const SESSION_KEY = 'smart-campus-session';
+    const updatedSession = { ...session, accessToken: nextAccessToken };
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(updatedSession));
+
+    return doFetch(nextAccessToken);
   });
 };

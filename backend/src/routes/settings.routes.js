@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { AppSettings, APP_SETTINGS_DEFAULTS } from '../models/AppSettings.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 
 export const settingsRouter = Router();
+settingsRouter.use('/settings', requireAuth, requireRoles('admin'));
 
 const ALLOWED_SECTIONS = [
   'sla',

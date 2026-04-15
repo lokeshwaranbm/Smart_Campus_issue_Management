@@ -1,5 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import { body, param, query } from 'express-validator';
 import { Issue } from '../models/Issue.js';
 import { User } from '../models/User.js';
 import { Category } from '../models/Category.js';
@@ -9,8 +10,24 @@ import { IssueComment } from '../models/IssueComment.js';
 import { IssueUpdate } from '../models/IssueUpdate.js';
 import { IssueSLA } from '../models/IssueSLA.js';
 import { Notification } from '../models/Notification.js';
+import { requireAuth } from '../middleware/auth.js';
+import { handleValidation } from '../middleware/validation.js';
 
 export const issueRouter = express.Router();
+issueRouter.use(requireAuth);
+
+const canAccessIssue = (issue, user) => {
+  if (!issue || !user) return false;
+  if (user.role === 'admin') return true;
+  if (user.role === 'student') return String(issue.studentEmail).toLowerCase() === String(user.email).toLowerCase();
+  if (user.role === 'staff') {
+    return (
+      String(issue.assignedTo || '').toLowerCase() === String(user.email).toLowerCase() ||
+      String(issue.internalAssignedTo || '').toLowerCase() === String(user.email).toLowerCase()
+    );
+  }
+  return false;
+};
 
 const createIssueUpdateSafe = async (payload) => {
   try {
@@ -34,6 +51,8 @@ const CATEGORY_ALIAS_TO_NAME = {
 };
 
 const ALLOWED_PRIORITIES = new Set(['low', 'medium', 'high', 'critical']);
+const RESOLUTION_MAX_DISTANCE_METERS = Number(process.env.RESOLUTION_MAX_DISTANCE_METERS || 75);
+const RESOLUTION_MAX_ACCURACY_METERS = Number(process.env.RESOLUTION_MAX_ACCURACY_METERS || 200);
 
 function getNormalizedIssuePriority(issue) {
   const reportedPriority = String(issue?.reportedPriority || '').trim().toLowerCase();
@@ -59,6 +78,100 @@ function withNormalizedPriority(issue) {
   return {
     ...issue,
     priority: getNormalizedIssuePriority(issue),
+  };
+}
+
+function toFiniteNumber(value) {
+  const nextValue = Number(value);
+  return Number.isFinite(nextValue) ? nextValue : null;
+}
+
+function haversineDistanceMeters(latitudeA, longitudeA, latitudeB, longitudeB) {
+  const radius = 6371000;
+  const deltaLatitude = ((latitudeB - latitudeA) * Math.PI) / 180;
+  const deltaLongitude = ((longitudeB - longitudeA) * Math.PI) / 180;
+  const startLatitude = (latitudeA * Math.PI) / 180;
+  const endLatitude = (latitudeB * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
+    Math.cos(startLatitude) * Math.cos(endLatitude) *
+    Math.sin(deltaLongitude / 2) * Math.sin(deltaLongitude / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return radius * c;
+}
+
+function normalizeResolutionProof(rawProof) {
+  if (!rawProof || typeof rawProof !== 'object') return null;
+
+  return {
+    imageUrl: String(rawProof.imageUrl || '').trim(),
+    capturedByEmail: String(rawProof.capturedByEmail || '').trim().toLowerCase(),
+    capturedByName: String(rawProof.capturedByName || '').trim(),
+    capturedAt: rawProof.capturedAt ? new Date(rawProof.capturedAt) : new Date(),
+    latitude: toFiniteNumber(rawProof.latitude),
+    longitude: toFiniteNumber(rawProof.longitude),
+    accuracy: toFiniteNumber(rawProof.accuracy),
+    blockNumber: String(rawProof.blockNumber || '').trim(),
+    floorNumber: String(rawProof.floorNumber || '').trim(),
+    notes: String(rawProof.notes || '').trim(),
+  };
+}
+
+function validateResolutionProof(issue, proof) {
+  if (!proof) {
+    return { ok: false, message: 'Resolution proof is required to mark an issue as resolved.' };
+  }
+
+  if (!proof.imageUrl || !proof.imageUrl.startsWith('data:image/')) {
+    return { ok: false, message: 'Resolution proof photo is required.' };
+  }
+
+  if (!Number.isFinite(proof.latitude) || !Number.isFinite(proof.longitude)) {
+    return { ok: false, message: 'Resolution proof must include location coordinates.' };
+  }
+
+  if (!Number.isFinite(issue.latitude) || !Number.isFinite(issue.longitude)) {
+    return { ok: false, message: 'Issue is missing precise coordinates and cannot be resolved with proof yet.' };
+  }
+
+  if (Number.isFinite(proof.accuracy) && proof.accuracy > RESOLUTION_MAX_ACCURACY_METERS) {
+    return {
+      ok: false,
+      message: `Location accuracy is too low. Please capture again with accuracy of ${RESOLUTION_MAX_ACCURACY_METERS}m or better.`,
+    };
+  }
+
+  if (String(issue.blockNumber || '').trim() && String(proof.blockNumber || '').trim()) {
+    if (String(issue.blockNumber).trim().toLowerCase() !== String(proof.blockNumber).trim().toLowerCase()) {
+      return { ok: false, message: 'Proof block number does not match the issue details.' };
+    }
+  }
+
+  if (String(issue.floorNumber || '').trim() && String(proof.floorNumber || '').trim()) {
+    if (String(issue.floorNumber).trim().toLowerCase() !== String(proof.floorNumber).trim().toLowerCase()) {
+      return { ok: false, message: 'Proof floor number does not match the issue details.' };
+    }
+  }
+
+  const distanceMeters = haversineDistanceMeters(
+    Number(issue.latitude),
+    Number(issue.longitude),
+    proof.latitude,
+    proof.longitude
+  );
+
+  if (distanceMeters > RESOLUTION_MAX_DISTANCE_METERS) {
+    return {
+      ok: false,
+      message: `Proof location is too far from the reported issue (${Math.round(distanceMeters)}m). Maximum allowed is ${RESOLUTION_MAX_DISTANCE_METERS}m.`,
+    };
+  }
+
+  return {
+    ok: true,
+    distanceMeters,
   };
 }
 
@@ -209,8 +322,22 @@ async function findBestStaffForCategory(categoryKey) {
 }
 
 // POST /api/issues — create a new issue
-issueRouter.post('/issues', async (req, res) => {
+issueRouter.post(
+  '/issues',
+  [
+    body('id').isLength({ min: 3, max: 80 }),
+    body('title').isLength({ min: 3, max: 200 }),
+    body('description').isLength({ min: 3, max: 5000 }),
+    body('category').isLength({ min: 2, max: 100 }),
+    body('priority').optional().isIn(['low', 'medium', 'high', 'critical']),
+    handleValidation,
+  ],
+  async (req, res) => {
   try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ message: 'Only students can create issues.' });
+    }
+
     const {
       id,
       title,
@@ -223,15 +350,14 @@ issueRouter.post('/issues', async (req, res) => {
       latitude,
       longitude,
       imageUrl,
-      studentEmail,
       studentName,
     } = req.body;
 
-    if (!id || !title || !description || !category || !studentEmail) {
+    if (!id || !title || !description || !category) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    const reporter = await User.findOne({ email: String(studentEmail).toLowerCase() }).lean();
+    const reporter = await User.findOne({ email: String(req.user.email).toLowerCase() }).lean();
     if (!reporter || reporter.role !== 'student' || reporter.isSuspended || !reporter.isActive) {
       return res.status(403).json({
         message: 'Only active student accounts can submit issues.',
@@ -297,11 +423,16 @@ issueRouter.post('/issues', async (req, res) => {
     console.error('POST /issues error:', err);
     return res.status(500).json({ message: 'Server error' });
   }
-});
+  }
+);
 
 // GET /api/issues/stats — summary counts (must be before /:id)
 issueRouter.get('/issues/stats', async (req, res) => {
   try {
+    if (!['admin', 'staff'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not allowed.' });
+    }
+
     const [total, submitted, assigned, inProgress, resolved, closed] = await Promise.all([
       Issue.countDocuments(),
       Issue.countDocuments({ status: 'submitted' }),
@@ -318,15 +449,32 @@ issueRouter.get('/issues/stats', async (req, res) => {
 });
 
 // GET /api/issues — list issues with optional filters
-issueRouter.get('/issues', async (req, res) => {
+issueRouter.get(
+  '/issues',
+  [
+    query('status').optional().isLength({ min: 2, max: 40 }),
+    query('category').optional().isLength({ min: 2, max: 100 }),
+    query('studentEmail').optional().isEmail(),
+    query('assignedTo').optional().isEmail(),
+    handleValidation,
+  ],
+  async (req, res) => {
   try {
     const { status, category, studentEmail, assignedTo, assignedDepartment } = req.query;
     const filter = {};
     if (status) filter.status = status;
     if (category) filter.category = category;
-    if (studentEmail) filter.studentEmail = studentEmail;
-    if (assignedTo) filter.assignedTo = assignedTo;
+    if (studentEmail) filter.studentEmail = String(studentEmail).toLowerCase();
+    if (assignedTo) filter.assignedTo = String(assignedTo).toLowerCase();
     if (assignedDepartment) filter.assignedDepartment = assignedDepartment;
+
+    if (req.user.role === 'student') {
+      filter.studentEmail = String(req.user.email).toLowerCase();
+    }
+
+    if (req.user.role === 'staff') {
+      filter.assignedTo = String(req.user.email).toLowerCase();
+    }
 
     const issues = await Issue.find(filter).sort({ createdAt: -1 }).lean();
     return res.json(issues.map(withNormalizedPriority));
@@ -334,13 +482,17 @@ issueRouter.get('/issues', async (req, res) => {
     console.error('GET /issues error:', err);
     return res.status(500).json({ message: 'Server error' });
   }
-});
+  }
+);
 
 // GET /api/issues/:id — single issue by display id
-issueRouter.get('/issues/:id', async (req, res) => {
+issueRouter.get('/issues/:id', [param('id').isLength({ min: 3, max: 80 }), handleValidation], async (req, res) => {
   try {
     const issue = await Issue.findOne({ id: req.params.id }).lean();
     if (!issue) return res.status(404).json({ message: 'Issue not found' });
+    if (!canAccessIssue(issue, req.user)) {
+      return res.status(403).json({ message: 'Not allowed to access this issue.' });
+    }
     return res.json(withNormalizedPriority(issue));
   } catch (err) {
     console.error('GET /issues/:id error:', err);
@@ -349,17 +501,68 @@ issueRouter.get('/issues/:id', async (req, res) => {
 });
 
 // PATCH /api/issues/:id/status
-issueRouter.patch('/issues/:id/status', async (req, res) => {
+issueRouter.patch(
+  '/issues/:id/status',
+  [body('status').isIn(['in_progress', 'resolved', 'assigned', 'closed', 'open', 'acknowledged', 'on_hold', 'rejected']), handleValidation],
+  async (req, res) => {
   try {
-    const { status, updatedBy } = req.body;
+    if (!['admin', 'staff'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only staff/admin can change issue status.' });
+    }
+
+    const { status } = req.body;
+    const resolutionProof = normalizeResolutionProof(req.body.resolutionProof);
     if (!status) return res.status(400).json({ message: 'status is required' });
 
     const currentIssue = await Issue.findOne({ id: req.params.id });
     if (!currentIssue) return res.status(404).json({ message: 'Issue not found' });
+    if (req.user.role === 'staff' && !canAccessIssue(currentIssue, req.user)) {
+      return res.status(403).json({ message: 'Not allowed to modify this issue.' });
+    }
+
+    if (status === 'resolved') {
+      const previousStatus = currentIssue.status;
+      const proofResult = validateResolutionProof(currentIssue, resolutionProof);
+      if (!proofResult.ok) {
+        return res.status(400).json({ message: proofResult.message });
+      }
+
+      currentIssue.status = 'resolved';
+      currentIssue.resolvedAt = new Date();
+      currentIssue.lastUpdatedBy = req.user.email || null;
+      currentIssue.resolutionProof = {
+        imageUrl: resolutionProof.imageUrl,
+        capturedByEmail: resolutionProof.capturedByEmail || req.user.email || null,
+        capturedByName: resolutionProof.capturedByName || null,
+        capturedAt: resolutionProof.capturedAt,
+        latitude: resolutionProof.latitude,
+        longitude: resolutionProof.longitude,
+        accuracy: resolutionProof.accuracy,
+        distanceMeters: Math.round(proofResult.distanceMeters),
+        issueLatitude: Number(currentIssue.latitude),
+        issueLongitude: Number(currentIssue.longitude),
+        blockNumber: resolutionProof.blockNumber || currentIssue.blockNumber || null,
+        floorNumber: resolutionProof.floorNumber || currentIssue.floorNumber || null,
+        notes: resolutionProof.notes || null,
+      };
+
+      await currentIssue.save();
+
+      await createIssueUpdateSafe({
+        issueId: currentIssue._id,
+        eventType: 'resolved',
+        previousValue: { status: previousStatus },
+        newValue: { status: currentIssue.status, resolutionProof: currentIssue.resolutionProof },
+        note: `Issue resolved with proof. Distance ${Math.round(proofResult.distanceMeters)}m.`,
+        changedByEmail: req.user.email || null,
+      });
+
+      return res.json(currentIssue);
+    }
 
     const issue = await Issue.findOneAndUpdate(
       { id: req.params.id },
-      { status, lastUpdatedBy: updatedBy || null },
+      { status, lastUpdatedBy: req.user.email || null },
       { new: true }
     );
 
@@ -369,7 +572,7 @@ issueRouter.patch('/issues/:id/status', async (req, res) => {
       previousValue: { status: currentIssue.status },
       newValue: { status: issue.status },
       note: `Status updated to ${issue.status}`,
-      changedByEmail: updatedBy || null,
+      changedByEmail: req.user.email || null,
     });
 
     return res.json(issue);
@@ -377,11 +580,16 @@ issueRouter.patch('/issues/:id/status', async (req, res) => {
     console.error('PATCH /issues/:id/status error:', err);
     return res.status(500).json({ message: 'Server error' });
   }
-});
+  }
+);
 
 // PATCH /api/issues/:id/assign
 issueRouter.patch('/issues/:id/assign', async (req, res) => {
   try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can assign issues.' });
+    }
+
     const { department, assignedTo } = req.body;
 
     const currentIssue = await Issue.findOne({ id: req.params.id });
@@ -431,14 +639,24 @@ issueRouter.patch('/issues/:id/assign', async (req, res) => {
 // POST /api/issues/:id/remarks
 issueRouter.post('/issues/:id/remarks', async (req, res) => {
   try {
-    const { text, authorEmail } = req.body;
-    if (!text || !authorEmail) {
-      return res.status(400).json({ message: 'text and authorEmail are required' });
+    if (!['admin', 'staff'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only staff/admin can add remarks.' });
+    }
+
+    const { text } = req.body;
+    if (!text) {
+      return res.status(400).json({ message: 'text is required' });
+    }
+
+    const currentIssue = await Issue.findOne({ id: req.params.id }).lean();
+    if (!currentIssue) return res.status(404).json({ message: 'Issue not found' });
+    if (req.user.role === 'staff' && !canAccessIssue(currentIssue, req.user)) {
+      return res.status(403).json({ message: 'Not allowed to modify this issue.' });
     }
 
     const issue = await Issue.findOneAndUpdate(
       { id: req.params.id },
-      { $push: { remarks: { text, authorEmail, timestamp: new Date() } } },
+      { $push: { remarks: { text, authorEmail: req.user.email, timestamp: new Date() } } },
       { new: true }
     );
     if (!issue) return res.status(404).json({ message: 'Issue not found' });
@@ -452,10 +670,12 @@ issueRouter.post('/issues/:id/remarks', async (req, res) => {
 // POST /api/issues/:id/comments
 issueRouter.post('/issues/:id/comments', async (req, res) => {
   try {
-    const { text, userEmail, userName } = req.body;
-    if (!text || !userEmail) {
-      return res.status(400).json({ message: 'text and userEmail are required' });
+    const { text, userName } = req.body;
+    if (!text) {
+      return res.status(400).json({ message: 'text is required' });
     }
+
+    const userEmail = String(req.user.email).toLowerCase();
 
     const issue = await Issue.findOneAndUpdate(
       { id: req.params.id },
@@ -502,8 +722,11 @@ issueRouter.post('/issues/:id/comments', async (req, res) => {
 // POST /api/issues/:id/support — toggle support for a user
 issueRouter.post('/issues/:id/support', async (req, res) => {
   try {
-    const { userEmail } = req.body;
-    if (!userEmail) return res.status(400).json({ message: 'userEmail is required' });
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ message: 'Only students can support issues.' });
+    }
+
+    const userEmail = String(req.user.email).toLowerCase();
 
     const existing = await Issue.findOne({ id: req.params.id });
     if (!existing) return res.status(404).json({ message: 'Issue not found' });
@@ -532,6 +755,10 @@ issueRouter.post('/issues/:id/support', async (req, res) => {
 // DELETE /api/issues/:id
 issueRouter.delete('/issues/:id', async (req, res) => {
   try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can delete issues.' });
+    }
+
     const session = await mongoose.startSession();
     let deletedIssue = null;
     let deletedCounts = {

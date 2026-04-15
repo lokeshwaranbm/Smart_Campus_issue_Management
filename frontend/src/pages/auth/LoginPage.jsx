@@ -85,7 +85,7 @@ export default function LoginPage() {
     // Clear login attempts on successful login
     clearLoginAttempts(formData.email);
 
-    setAuthSession(result.user);
+    setAuthSession(result.user, result.accessToken || null);
     navigate(result.redirectTo || resolveRoleRedirect(result.user.role));
   };
 

@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, MapPin, ExternalLink, X, Download } from 'lucide-react';
+import { ArrowLeft, Send, MapPin, ExternalLink } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import SelectField from '../../components/auth/SelectField';
 import AlertMessage from '../../components/auth/AlertMessage';
+import ImageViewerModal from '../../components/common/ImageViewerModal';
+import ResolutionProofModal from '../../components/common/ResolutionProofModal';
 import {
   getIssueById,
   updateIssueStatus,
   addIssueRemark,
 } from '../../utils/issues';
+import { getIssueAttachments } from '../../utils/imageUpload';
 import { getAuthSession } from '../../utils/auth';
 import { ISSUE_STATUS, ISSUE_PRIORITIES } from '../../constants/issues';
 import {
@@ -28,8 +31,9 @@ export default function AdminIssueDetailPage() {
   const [newStatus, setNewStatus] = useState('');
   const [remark, setRemark] = useState('');
   const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState([]);
   const [imageModalOpen, setImageModalOpen] = useState(false);
-  const [imageLoadError, setImageLoadError] = useState(false);
+  const [resolutionProofOpen, setResolutionProofOpen] = useState(false);
 
   const loadIssue = () => {
     setLoading(true);
@@ -37,6 +41,13 @@ export default function AdminIssueDetailPage() {
       .then((data) => {
         setIssue(data);
         setNewStatus(data?.status || '');
+        if (data?._id) {
+          return getIssueAttachments(data._id)
+            .then((result) => setAttachments(result?.data || []))
+            .catch(() => setAttachments([]));
+        }
+        setAttachments([]);
+        return null;
       })
       .catch(() => setIssue(null))
       .finally(() => setLoading(false));
@@ -75,8 +86,20 @@ export default function AdminIssueDetailPage() {
       return;
     }
 
+    if (newStatus === 'resolved') {
+      setResolutionProofOpen(true);
+      return;
+    }
+
     await updateIssueStatus(issueId, newStatus, session?.email);
     setMessage('Status updated successfully.');
+    setTimeout(() => loadIssue(), 1500);
+  };
+
+  const handleResolutionProofSubmit = async (resolutionProof) => {
+    await updateIssueStatus(issueId, 'resolved', session?.email, resolutionProof);
+    setNewStatus('resolved');
+    setMessage('Issue resolved with proof.');
     setTimeout(() => loadIssue(), 1500);
   };
 
@@ -110,48 +133,26 @@ export default function AdminIssueDetailPage() {
 
       <AlertMessage message={message} />
 
-      {/* Image Modal Viewer */}
-      {imageModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setImageModalOpen(false)}>
-          <div className="relative max-h-[90vh] max-w-2xl w-full rounded-lg bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <h3 className="text-sm font-semibold text-slate-900">Image Viewer</h3>
-              <button onClick={() => setImageModalOpen(false)} className="rounded-lg p-1 text-slate-600 hover:bg-slate-200">
-                <X size={20} />
-              </button>
-            </div>
-            {/* Image Container */}
-            <div className="flex items-center justify-center bg-slate-900 px-4 py-6">
-              {imageLoadError ? (
-                <div className="text-center">
-                  <p className="text-sm text-slate-300 mb-2">Image failed to load</p>
-                  <a
-                    href={issue.imageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                  >
-                    <Download size={16} />
-                    Download instead
-                  </a>
-                </div>
-              ) : (
-                <img
-                  src={issue.imageUrl}
-                  alt={`Issue ${issue.id} full view`}
-                  className="max-h-[75vh] max-w-full object-contain"
-                  onError={() => setImageLoadError(true)}
-                />
-              )}
-            </div>
-            {/* Footer */}
-            <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-center">
-              <p className="text-xs text-slate-600">Issue: {issue.id}</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <ResolutionProofModal
+        open={resolutionProofOpen}
+        issue={issue}
+        user={session}
+        onCancel={() => setResolutionProofOpen(false)}
+        onSubmit={handleResolutionProofSubmit}
+      />
+
+      <ImageViewerModal
+        open={imageModalOpen}
+        imageUrl={issue.imageUrl}
+        title={`Issue ${issue.id} evidence`}
+        issueId={issue.id}
+        issueTitle={issue.title}
+        reporterName={issue.studentName}
+        reporterEmail={issue.studentEmail}
+        reportedAt={issue.createdAt}
+        attachment={attachments.find((item) => item.publicUrl === issue.imageUrl) || attachments[0] || null}
+        onClose={() => setImageModalOpen(false)}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6 lg:sticky lg:top-28 lg:self-start lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-1">
@@ -173,7 +174,7 @@ export default function AdminIssueDetailPage() {
                 <div>
                   <p className="text-xs font-medium uppercase text-slate-500">Uploaded Photo</p>
                   <button
-                    onClick={() => { setImageModalOpen(true); setImageLoadError(false); }}
+                    onClick={() => setImageModalOpen(true)}
                     className="mt-2 block w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition hover:border-blue-300 hover:shadow-md"
                     type="button"
                   >
@@ -182,10 +183,16 @@ export default function AdminIssueDetailPage() {
                       alt={`Issue ${issue.id} uploaded evidence`}
                       className="h-56 w-full object-cover"
                       loading="lazy"
-                      onError={() => setImageLoadError(true)}
                     />
                   </button>
                   <p className="mt-2 text-xs text-slate-500">Click image to view full size.</p>
+                  {attachments[0] && (
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                      <p className="font-semibold text-slate-800">Image record</p>
+                      <p className="mt-1">Uploaded by: {attachments[0].uploadedByEmail || 'Unknown'}</p>
+                      <p>Uploaded at: {attachments[0].uploadedAt ? new Date(attachments[0].uploadedAt).toLocaleString() : 'Unknown'}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -319,6 +326,12 @@ export default function AdminIssueDetailPage() {
                 options={ISSUE_STATUS}
                 placeholder="Select status"
               />
+
+              {newStatus === 'resolved' && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  Resolving this issue requires a proof photo and live location check.
+                </div>
+              )}
 
               <button onClick={handleStatusUpdate} className="primary-button">
                 Update Status

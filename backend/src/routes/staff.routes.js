@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { Department } from '../models/Department.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 import {
   getAllStaff,
   getStaffById,
@@ -16,6 +17,7 @@ import {
 import { User } from '../models/User.js';
 
 export const staffRouter = Router();
+staffRouter.use('/admin', requireAuth, requireRoles('admin'));
 
 const DEFAULT_DEPARTMENTS = [
   'Agricultural Engineering',

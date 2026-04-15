@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAuthSession, clearAuthSession } from '../../utils/auth';
+import { getAuthSession, logoutUser } from '../../utils/auth';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 
 export default function UserAccountDropdown() {
@@ -8,8 +8,8 @@ export default function UserAccountDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const session = getAuthSession();
 
-  const handleLogout = () => {
-    clearAuthSession();
+  const handleLogout = async () => {
+    await logoutUser();
     setIsOpen(false);
     navigate('/login');
   };

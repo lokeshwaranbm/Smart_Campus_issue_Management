@@ -4,6 +4,7 @@ import { IssueSLA } from '../models/IssueSLA.js';
 import { Notification } from '../models/Notification.js';
 import { reassignIssue } from '../services/slaService.js';
 import mongoose from 'mongoose';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 
 export const categoryRouter = Router();
 
@@ -13,7 +14,7 @@ export const categoryRouter = Router();
  * GET /api/categories
  * Get all active categories with their assigned staff
  */
-categoryRouter.get('/categories', async (req, res) => {
+categoryRouter.get('/categories', requireAuth, async (req, res) => {
   try {
     const categories = await Category.find({ isActive: true })
       .populate('assignedStaff', 'id name email role')
@@ -32,6 +33,9 @@ categoryRouter.get('/categories', async (req, res) => {
     });
   }
 });
+
+categoryRouter.use('/categories', requireAuth);
+categoryRouter.use('/admin', requireAuth, requireRoles('admin'));
 
 /**
  * POST /api/categories

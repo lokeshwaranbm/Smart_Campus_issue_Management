@@ -1,13 +1,20 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import morgan from 'morgan';
 import mongoose from 'mongoose';
 import { authRouter } from './routes/auth.routes.js';
 import { categoryRouter } from './routes/categories.routes.js';
 import { staffRouter } from './routes/staff.routes.js';
 import { issueRouter } from './routes/issues.routes.js';
 import { settingsRouter } from './routes/settings.routes.js';
+import uploadRouter from './routes/uploads.routes.js';
 import { initializeSLAJobs, stopSLAJobs } from './jobs/slaMonitor.js';
+import { logger } from './config/logger.js';
+import { helmetMiddleware, sanitizeNoSqlMiddleware, globalRateLimiter } from './middleware/security.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { sanitizeObjectStrings } from './utils/sanitize.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,32 +26,34 @@ let mongoConnection = null;
 let slaJobs = null;
 let server = null;
 
+app.set('trust proxy', 1);
+
 app.use(
   cors({
     origin: CORS_ORIGIN.split(',').map((o) => o.trim()),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-role', 'x-user-email'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
-app.use(express.json());
-
-app.use('/api', (req, res, next) => {
-  const path = req.path || '';
-
-  if (path.startsWith('/auth') || path === '/health') {
-    return next();
-  }
-
-  if (path.startsWith('/admin')) {
-    const role = String(req.headers['x-user-role'] || '').toLowerCase();
-    if (role !== 'admin') {
-      return res.status(403).json({ ok: false, message: 'Admin access required.' });
-    }
-  }
-
-  return next();
+app.use(helmetMiddleware);
+app.use(globalRateLimiter);
+app.use(sanitizeNoSqlMiddleware);
+app.use(cookieParser());
+app.use(express.json({ limit: '1mb' }));
+app.use((req, _res, next) => {
+  if (req.body && typeof req.body === 'object') req.body = sanitizeObjectStrings(req.body);
+  if (req.query && typeof req.query === 'object') req.query = sanitizeObjectStrings(req.query);
+  if (req.params && typeof req.params === 'object') req.params = sanitizeObjectStrings(req.params);
+  next();
 });
+app.use(
+  morgan('combined', {
+    stream: {
+      write: (message) => logger.info(message.trim()),
+    },
+  })
+);
 
 const connectDatabase = async () => {
   if (!MONGODB_URI) {
@@ -95,15 +104,9 @@ app.use('/api', categoryRouter);
 app.use('/api', staffRouter);
 app.use('/api', issueRouter);
 app.use('/api', settingsRouter);
-
-app.use((err, req, res, next) => {
-  console.error('💥 Unhandled error:', err);
-  res.status(500).json({
-    ok: false,
-    message: 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined,
-  });
-});
+app.use('/api/uploads', uploadRouter);
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 const shutdown = async (signal) => {
   console.log(`🛑 ${signal} received. Shutting down gracefully...`);

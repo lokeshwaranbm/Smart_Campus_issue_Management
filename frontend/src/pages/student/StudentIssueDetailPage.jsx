@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ThumbsUp, MessageCircle, MapPin, Calendar, AlertCircle, Send, Heart, MessageSquare, Zap } from 'lucide-react';
+import { ArrowLeft, ThumbsUp, MessageCircle, MapPin, Calendar, AlertCircle, Send, Heart, MessageSquare, Zap, ShieldCheck, BadgeCheck } from 'lucide-react';
 import DashboardShell from '../../components/dashboard/DashboardShell';
 import AlertMessage from '../../components/auth/AlertMessage';
+import ImageViewerModal from '../../components/common/ImageViewerModal';
 import { getAuthSession } from '../../utils/auth';
 import { getIssueById, addComment, addSupport } from '../../utils/issues';
 import { ISSUE_STATUS } from '../../constants/issues';
@@ -16,6 +17,7 @@ export default function StudentIssueDetailPage() {
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [message, setMessage] = useState('');
+  const [imageModalOpen, setImageModalOpen] = useState(false);
 
   const loadIssue = () => {
     setLoading(true);
@@ -71,6 +73,8 @@ export default function StudentIssueDetailPage() {
     return s?.label || status;
   };
 
+  const isResolvedWithProof = issue?.status === 'resolved' && Boolean(issue?.resolutionProof);
+
   const formatDate = (date) => new Date(date).toLocaleString();
 
   const handleSupport = async () => {
@@ -102,19 +106,40 @@ export default function StudentIssueDetailPage() {
         Back to Dashboard
       </button>
 
+      <ImageViewerModal
+        open={imageModalOpen}
+        imageUrl={issue?.imageUrl}
+        title={issue?.title || 'Issue image'}
+        issueId={issue?.id}
+        issueTitle={issue?.title}
+        reporterName={issue?.studentName}
+        reporterEmail={issue?.studentEmail}
+        reportedAt={issue?.createdAt}
+        attachment={null}
+        onClose={() => setImageModalOpen(false)}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         {/* Main Content */}
         <div className="space-y-6">
           {/* Issue Header */}
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-md">
             {issue?.imageUrl && (
-              <div className="relative h-64 w-full overflow-hidden bg-slate-200">
+              <button
+                type="button"
+                onClick={() => setImageModalOpen(true)}
+                className="relative block h-64 w-full overflow-hidden bg-slate-200"
+                title="Open uploaded photo"
+              >
                 <img
                   src={issue.imageUrl}
                   alt={issue.title}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover transition hover:scale-[1.01]"
                 />
-              </div>
+                <span className="absolute inset-x-4 bottom-4 rounded-full bg-slate-950/70 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                  Tap to view image details
+                </span>
+              </button>
             )}
 
             <div className="p-6">
@@ -123,9 +148,17 @@ export default function StudentIssueDetailPage() {
                   <h1 className="text-2xl font-bold text-slate-900">{issue.title}</h1>
                   <p className="mt-1 text-sm text-slate-500">Issue ID: {issue.id}</p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-sm font-semibold ${getStatusColor(issue.status)}`}>
-                  {getStatusLabel(issue.status)}
-                </span>
+                <div className="flex flex-col items-end gap-2">
+                  <span className={`rounded-full px-3 py-1 text-sm font-semibold ${getStatusColor(issue.status)}`}>
+                    {getStatusLabel(issue.status)}
+                  </span>
+                  {isResolvedWithProof && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      <ShieldCheck size={14} />
+                      Resolved with proof
+                    </span>
+                  )}
+                </div>
               </div>
 
               <p className="mb-4 text-slate-700">{issue.description}</p>
@@ -141,6 +174,109 @@ export default function StudentIssueDetailPage() {
                   <p className="font-semibold text-slate-900 capitalize">{issue.category}</p>
                 </div>
               </div>
+
+              {isResolvedWithProof && (
+                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <div className="flex items-start gap-2">
+                    <BadgeCheck size={18} className="mt-0.5 text-emerald-600" />
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-900">Resolution timeline</p>
+                      <p className="text-xs text-emerald-800">
+                        Resolved with proof on {issue.resolutionProof?.capturedAt ? formatDate(issue.resolutionProof.capturedAt) : formatDate(issue.resolvedAt || issue.updatedAt || issue.createdAt)}.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {issue.status === 'resolved' && issue.resolutionProof && (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Resolution Proof</p>
+                      <p className="text-sm font-semibold text-emerald-900">Verified proof submitted by maintenance</p>
+                    </div>
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      Resolved
+                    </span>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+                    <div className="overflow-hidden rounded-xl border border-emerald-200 bg-white">
+                      {issue.resolutionProof.imageUrl ? (
+                        <img
+                          src={issue.resolutionProof.imageUrl}
+                          alt={`Resolution proof for issue ${issue.id}`}
+                          className="h-64 w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-64 items-center justify-center bg-slate-50 text-sm text-slate-500">
+                          No proof image attached.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-3 rounded-xl border border-emerald-200 bg-white p-4 text-sm text-slate-700">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Captured by</p>
+                        <p className="mt-1 font-semibold text-slate-900">
+                          {issue.resolutionProof.capturedByName || 'Unknown'}
+                        </p>
+                        <p className="text-xs text-slate-500">{issue.resolutionProof.capturedByEmail || 'Unknown'}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Captured at</p>
+                        <p className="mt-1 text-slate-900">
+                          {issue.resolutionProof.capturedAt ? formatDate(issue.resolutionProof.capturedAt) : 'Unknown'}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Proof location</p>
+                        <p className="mt-1 text-slate-900">
+                          {issue.resolutionProof.latitude !== null && issue.resolutionProof.longitude !== null
+                            ? `${Number(issue.resolutionProof.latitude).toFixed(6)}, ${Number(issue.resolutionProof.longitude).toFixed(6)}`
+                            : 'Unknown'}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Accuracy</p>
+                          <p className="mt-1 text-slate-900">
+                            {issue.resolutionProof.accuracy !== null && issue.resolutionProof.accuracy !== undefined
+                              ? `${Math.round(issue.resolutionProof.accuracy)}m`
+                              : 'Unknown'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Distance</p>
+                          <p className="mt-1 text-slate-900">
+                            {issue.resolutionProof.distanceMeters !== null && issue.resolutionProof.distanceMeters !== undefined
+                              ? `${Math.round(issue.resolutionProof.distanceMeters)}m`
+                              : 'Unknown'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Block / Floor</p>
+                        <p className="mt-1 text-slate-900">
+                          {issue.resolutionProof.blockNumber || 'N/A'} / {issue.resolutionProof.floorNumber || 'N/A'}
+                        </p>
+                      </div>
+
+                      {issue.resolutionProof.notes && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notes</p>
+                          <p className="mt-1 text-slate-700">{issue.resolutionProof.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {issue.assignedDepartment && issue.status !== 'submitted' && (
                 <div className="mt-3 rounded-lg border-l-4 border-blue-300 bg-blue-50 p-3">
